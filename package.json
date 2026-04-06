@@ -8,6 +8,9 @@
     "desktop:dev": "concurrently \"npm run dev\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\"",
     "build": "next build",
     "desktop:build:win": "npm run build && electron-builder --win nsis",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
     "lint": "next lint",
     "test": "vitest run"
   },
@@ -17,6 +20,7 @@
     "react-dom": "19.0.0",
     "sharp": "0.34.1",
     "archiver": "7.0.1"
+    "react-dom": "19.0.0"
   },
   "devDependencies": {
     "@types/node": "22.13.10",
@@ -61,5 +65,6 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true
     }
+    "vitest": "3.0.8"
   }
 }
