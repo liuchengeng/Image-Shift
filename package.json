@@ -2,6 +2,12 @@
   "name": "image-shift",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "next dev",
+    "desktop:dev": "concurrently \"npm run dev\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\"",
+    "build": "next build",
+    "desktop:build:win": "npm run build && electron-builder --win nsis",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,6 +17,9 @@
   "dependencies": {
     "next": "15.2.0",
     "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "sharp": "0.34.1",
+    "archiver": "7.0.1"
     "react-dom": "19.0.0"
   },
   "devDependencies": {
@@ -18,11 +27,44 @@
     "@types/react": "19.0.10",
     "@types/react-dom": "19.0.4",
     "autoprefixer": "10.4.20",
+    "concurrently": "9.1.2",
+    "cross-env": "7.0.3",
+    "electron": "35.1.5",
+    "electron-builder": "25.1.8",
     "eslint": "9.20.1",
     "eslint-config-next": "15.2.0",
     "postcss": "8.5.3",
     "tailwindcss": "3.4.17",
     "typescript": "5.8.2",
+    "vitest": "3.0.8",
+    "wait-on": "8.0.3"
+  },
+  "build": {
+    "appId": "com.imageshift.app",
+    "productName": "Image-Shift",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
     "vitest": "3.0.8"
   }
 }
