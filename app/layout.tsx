@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Image-Shift",
-  description: "Local image utility MVP scaffold"
+  description: "Local-first desktop batch image processing for Windows"
 };
 
 type RootLayoutProps = Readonly<{
@@ -12,7 +12,7 @@ type RootLayoutProps = Readonly<{
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <body>{children}</body>
     </html>
   );

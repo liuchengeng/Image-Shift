@@ -1,27 +1,15 @@
-import type { BatchProcessRequest, BatchProcessResult } from "@/src/shared/types/image";
-
-type ZipRequest = {
-  files: string[];
-  zipPath: string;
-};
-
-type ZipResponse = {
-  success: boolean;
-  zipPath?: string;
-  error?: string;
-};
+import type { BatchProcessRequest, BatchProcessResult, ImportedImageFile, PreviewImage } from "../src/shared/types/image";
 
 declare global {
   interface Window {
-    imageShift: {
+    imageShift?: {
       platform: string;
       app: string;
       imageApi: {
-        health: () => Promise<{ ok: boolean }>;
-        pickInputFiles: () => Promise<string[]>;
+        pickInputFiles: () => Promise<ImportedImageFile[]>;
         pickOutputDir: () => Promise<string | null>;
+        loadPreview: (inputPath: string) => Promise<PreviewImage>;
         processBatch: (payload: BatchProcessRequest) => Promise<BatchProcessResult>;
-        exportZip: (payload: ZipRequest) => Promise<ZipResponse>;
       };
     };
   }

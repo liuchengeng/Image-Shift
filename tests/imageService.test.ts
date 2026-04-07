@@ -1,36 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { validateImageJob } from "@/src/main/services/imageService";
+import { validateBatchRequest, validateCropRect, validateImageJob } from "../src/main/services/imageService";
 
 describe("imageService validation", () => {
-  it("returns errors for invalid quality", () => {
+  it("rejects invalid output format", () => {
     const errors = validateImageJob({
       id: "1",
-      inputPath: "/tmp/in.png",
-      outputPath: "/tmp/out.png",
+      inputPath: "C:/tmp/demo.jpg",
+      outputFormat: "gif" as never
+    });
+
+    expect(errors).toContain("Output format must be jpeg, png, or webp.");
+  });
+
+  it("rejects invalid quality", () => {
+    const errors = validateImageJob({
+      id: "1",
+      inputPath: "C:/tmp/demo.jpg",
+      outputFormat: "jpeg",
       quality: 120
     });
 
     expect(errors).toContain("Quality must be an integer from 1 to 100.");
   });
 
-  it("returns errors for invalid crop", () => {
-    const errors = validateImageJob({
-      id: "1",
-      inputPath: "/tmp/in.png",
-      outputPath: "/tmp/out.png",
-      crop: { left: -1, top: 0, width: 100, height: 100 }
+  it("rejects invalid crop bounds", () => {
+    const errors = validateCropRect({
+      left: -1,
+      top: 0,
+      width: 120,
+      height: 80
     });
 
     expect(errors).toContain("Crop bounds must be non-negative and dimensions must be > 0.");
   });
 
-  it("requires output format hint", () => {
-    const errors = validateImageJob({
-      id: "1",
-      inputPath: "/tmp/in.png",
-      outputPath: "/tmp/out.unknown"
+  it("rejects empty batch requests", () => {
+    const errors = validateBatchRequest({
+      jobs: [],
+      outputDir: ""
     });
 
-    expect(errors).toContain("Output format is required via job.format or file extension (.jpeg/.png/.webp).");
+    expect(errors).toContain("At least one job is required.");
+    expect(errors).toContain("Output directory is required.");
   });
 });

@@ -1,9 +1,17 @@
 node_modules
 .next
 out
+release
+release-*
 coverage
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.log
+*.tsbuildinfo
+builder-debug.yml
+tmp-repro
+.env
+.env.*
 .DS_Store
