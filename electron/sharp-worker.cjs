@@ -27,31 +27,25 @@ function sanitizeCrop(crop, metadata) {
   return { left, top, width, height };
 }
 
-async function createPreview(inputPath) {
-  const metadata = await sharp(inputPath, { failOn: "none", sequentialRead: true }).metadata();
-
-  if (!metadata.width || !metadata.height) {
-    throw new Error("Failed to read image size.");
-  }
-
-  const previewBuffer = await sharp(inputPath, { failOn: "none", sequentialRead: true })
-    .resize({
-      width: 960,
-      height: 720,
-      fit: "inside",
-      withoutEnlargement: true
-    })
-    .png()
-    .toBuffer();
-
-  return {
-    width: metadata.width,
-    height: metadata.height,
-    dataUrl: `data:image/png;base64,${previewBuffer.toString("base64")}`
-  };
+function getMimeType(outputFormat) {
+  if (outputFormat === "jpeg") return "image/jpeg";
+  if (outputFormat === "webp") return "image/webp";
+  return "image/png";
 }
 
-async function processSingleJob(job, outputPath) {
+function applyJobOutput(image, job) {
+  if (job.outputFormat === "jpeg") {
+    return image.jpeg({ quality: job.quality ?? 80 });
+  }
+
+  if (job.outputFormat === "png") {
+    return image.png();
+  }
+
+  return image.webp({ quality: job.quality ?? 80 });
+}
+
+async function createJobPipeline(job) {
   const metadata = await sharp(job.inputPath, { failOn: "none", sequentialRead: true }).metadata();
   const image = sharp(job.inputPath, { failOn: "none", sequentialRead: true });
 
@@ -68,19 +62,73 @@ async function processSingleJob(job, outputPath) {
     });
   }
 
-  if (job.outputFormat === "jpeg") {
-    image.jpeg({ quality: job.quality ?? 80 });
-  } else if (job.outputFormat === "png") {
-    image.png();
-  } else {
-    image.webp({ quality: job.quality ?? 80 });
+  return applyJobOutput(image, job);
+}
+
+async function createPreview(inputPath) {
+  const metadata = await sharp(inputPath, { failOn: "none", sequentialRead: true }).metadata();
+
+  if (!metadata.width || !metadata.height) {
+    throw new Error("Failed to read image size.");
   }
 
+  const previewScale = Math.min(1, 960 / metadata.width, 720 / metadata.height);
+  const displayWidth = Math.round(metadata.width * previewScale);
+  const displayHeight = Math.round(metadata.height * previewScale);
+  const previewBuffer = await sharp(inputPath, { failOn: "none", sequentialRead: true })
+    .resize({
+      width: 960,
+      height: 720,
+      fit: "inside",
+      withoutEnlargement: true
+    })
+    .png()
+    .toBuffer();
+
+  return {
+    width: metadata.width,
+    height: metadata.height,
+    displayWidth,
+    displayHeight,
+    dataUrl: `data:image/png;base64,${previewBuffer.toString("base64")}`
+  };
+}
+
+async function processSingleJob(job, outputPath) {
+  const image = await createJobPipeline(job);
   await image.toFile(outputPath);
   const stats = await fs.stat(outputPath);
   return {
     outputPath,
     outputSizeBytes: stats.size
+  };
+}
+
+async function estimateSingleJob(job) {
+  const image = await createJobPipeline(job);
+  const buffer = await image.toBuffer();
+  return {
+    outputSizeBytes: buffer.length
+  };
+}
+
+async function previewSingleJob(job) {
+  const image = await createJobPipeline(job);
+  const buffer = await image.toBuffer();
+  const metadata = await sharp(buffer, { failOn: "none", sequentialRead: true }).metadata();
+
+  if (!metadata.width || !metadata.height) {
+    throw new Error("Failed to read preview image size.");
+  }
+
+  const previewScale = Math.min(1, 960 / metadata.width, 720 / metadata.height);
+  return {
+    width: metadata.width,
+    height: metadata.height,
+    displayWidth: Math.round(metadata.width * previewScale),
+    displayHeight: Math.round(metadata.height * previewScale),
+    outputSizeBytes: buffer.length,
+    dataUrl: `data:${getMimeType(job.outputFormat)};base64,${buffer.toString("base64")}`
   };
 }
 
@@ -97,26 +145,39 @@ async function handleTask(task) {
     return processSingleJob(task.job, task.outputPath);
   }
 
+  if (task.type === "estimate-single") {
+    return estimateSingleJob(task.job);
+  }
+
+  if (task.type === "preview-single") {
+    return previewSingleJob(task.job);
+  }
+
   throw new Error("Unknown image worker task.");
+}
+
+function sendResult(message, exitCode) {
+  if (!process.send) {
+    process.exit(exitCode);
+    return;
+  }
+
+  process.send(message, () => {
+    process.exit(exitCode);
+  });
 }
 
 process.once("message", async (task) => {
   try {
     const result = await handleTask(task);
-    if (process.send) {
-      process.send({ type: "success", result });
-    }
-    setImmediate(() => process.exit(0));
+    sendResult({ type: "success", result }, 0);
   } catch (error) {
-    if (process.send) {
-      process.send({
-        type: "error",
-        error: {
-          message: error instanceof Error ? error.message : "Image worker failed."
-        }
-      });
-    }
-    setImmediate(() => process.exit(1));
+    sendResult({
+      type: "error",
+      error: {
+        message: error instanceof Error ? error.message : "Image worker failed."
+      }
+    }, 1);
   }
 });
 

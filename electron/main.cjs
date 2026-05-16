@@ -114,6 +114,20 @@ async function createPreview(inputPath) {
   });
 }
 
+async function estimateJob(job) {
+  return runSharpWorker({
+    type: "estimate-single",
+    job
+  });
+}
+
+async function previewJob(job) {
+  return runSharpWorker({
+    type: "preview-single",
+    job
+  });
+}
+
 async function processSingleJob(job, outputDir) {
   const outputPath = await getUniqueOutputPath(outputDir, job.inputPath, job.outputFormat);
 
@@ -248,6 +262,24 @@ function registerIpcHandlers() {
     }
 
     return createPreview(inputPath);
+  });
+
+  ipcMain.handle("image:estimate-job", async (_event, job) => {
+    const validationErrors = validateJob(job);
+    if (validationErrors.length > 0) {
+      throw new Error(validationErrors.join(" "));
+    }
+
+    return estimateJob(job);
+  });
+
+  ipcMain.handle("image:preview-job", async (_event, job) => {
+    const validationErrors = validateJob(job);
+    if (validationErrors.length > 0) {
+      throw new Error(validationErrors.join(" "));
+    }
+
+    return previewJob(job);
   });
 
   ipcMain.handle("image:process-batch", async (_event, payload) => {

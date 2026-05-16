@@ -68,8 +68,17 @@ export function ImageShiftDashboard() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [draftCrop, setDraftCrop] = useState<CropBox | null>(null);
+  const [estimatedOutputSizeBytes, setEstimatedOutputSizeBytes] = useState<number | undefined>();
+  const [estimateError, setEstimateError] = useState("");
+  const [estimating, setEstimating] = useState(false);
 
   const selectedFile = useMemo(() => files.find((file) => file.id === selectedFileId) ?? null, [files, selectedFileId]);
+  const selectedInputPath = selectedFile?.inputPath;
+  const selectedCrop = selectedFile?.crop;
+  const selectedCropLeft = selectedCrop?.left;
+  const selectedCropTop = selectedCrop?.top;
+  const selectedCropWidth = selectedCrop?.width;
+  const selectedCropHeight = selectedCrop?.height;
   const resultsById = useMemo(() => new Map(result?.results.map((item) => [item.id, item]) ?? []), [result]);
   const selectedResult = selectedFile ? resultsById.get(selectedFile.id) : undefined;
   const effectiveMode: WorkbenchMode = activeMode === "Export" ? lastWorkbenchMode : activeMode;
@@ -105,7 +114,7 @@ export function ImageShiftDashboard() {
   useEffect(() => {
     const needsPreview = activeMode === "Compress" || activeMode === "Crop" || activeMode === "Resize";
 
-    if (!needsPreview || !selectedFile) {
+    if (!needsPreview || !selectedInputPath) {
       setPreview(null);
       setPreviewError("");
       setDraftCrop(null);
@@ -123,7 +132,7 @@ export function ImageShiftDashboard() {
     setPreviewError("");
     setDraftCrop(null);
 
-    desktopApi.loadPreview(selectedFile.inputPath)
+    desktopApi.loadPreview(selectedInputPath)
       .then((nextPreview) => {
         if (!cancelled) {
           setPreview(nextPreview);
@@ -138,10 +147,10 @@ export function ImageShiftDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [activeMode, selectedFile]);
+  }, [activeMode, selectedInputPath]);
 
   useEffect(() => {
-    if (activeMode !== "Compress" || !selectedResult?.success || !selectedResult.outputPath) {
+    if (activeMode !== "Compress" || !selectedFile) {
       setAfterPreview(null);
       setAfterPreviewError("");
       return;
@@ -149,32 +158,121 @@ export function ImageShiftDashboard() {
 
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
+      setAfterPreviewError("Desktop bridge is unavailable. Launch the EXE build.");
       return;
     }
+
+    const compressFormat = outputFormat === "png" ? "jpeg" : outputFormat;
+    const job: ImageJob = {
+      id: selectedFile.id,
+      inputPath: selectedFile.inputPath,
+      outputFormat: compressFormat,
+      quality
+    };
 
     let cancelled = false;
     setAfterPreview(null);
     setAfterPreviewError("");
+    setEstimating(true);
+    setEstimateError("");
 
-    desktopApi.loadPreview(selectedResult.outputPath)
-      .then((nextPreview) => {
-        if (!cancelled) {
-          setAfterPreview(nextPreview);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setAfterPreviewError(error instanceof Error ? error.message : "Output preview failed to load.");
-        }
-      });
+    const timer = window.setTimeout(() => {
+      desktopApi.previewJob(job)
+        .then((nextPreview) => {
+          if (!cancelled) {
+            setAfterPreview(nextPreview);
+            setEstimatedOutputSizeBytes(nextPreview.outputSizeBytes);
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            const message = error instanceof Error ? error.message : "Compressed preview failed to load.";
+            setAfterPreviewError(message);
+            setEstimatedOutputSizeBytes(undefined);
+            setEstimateError(message);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setEstimating(false);
+          }
+        });
+    }, 250);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [activeMode, selectedResult]);
+  }, [activeMode, outputFormat, quality, selectedFile]);
 
   useEffect(() => {
-    if (activeMode !== "Crop" || !selectedFile?.crop || !preview || !imageRef.current) {
+    if (!selectedFile) {
+      setEstimatedOutputSizeBytes(undefined);
+      setEstimateError("");
+      setEstimating(false);
+      return;
+    }
+
+    if (activeMode !== "Convert") {
+      return;
+    }
+
+    const desktopApi = getDesktopApi();
+    if (!desktopApi) {
+      setEstimatedOutputSizeBytes(undefined);
+      setEstimateError("Unavailable outside Electron");
+      setEstimating(false);
+      return;
+    }
+
+    const job: ImageJob = {
+      id: selectedFile.id,
+      inputPath: selectedFile.inputPath,
+      outputFormat,
+      quality: outputFormat === "png" ? undefined : quality
+    };
+
+    let cancelled = false;
+    setEstimating(true);
+    setEstimateError("");
+
+    const timer = window.setTimeout(() => {
+      desktopApi.estimateJob(job)
+        .then((estimate) => {
+          if (!cancelled) {
+            setEstimatedOutputSizeBytes(estimate.outputSizeBytes);
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setEstimatedOutputSizeBytes(undefined);
+            setEstimateError(error instanceof Error ? error.message : "Estimate failed");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setEstimating(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeMode, outputFormat, quality, selectedFile]);
+
+  useEffect(() => {
+    if (
+      activeMode !== "Crop" ||
+      dragState ||
+      selectedCropLeft === undefined ||
+      selectedCropTop === undefined ||
+      selectedCropWidth === undefined ||
+      selectedCropHeight === undefined ||
+      !preview ||
+      !imageRef.current
+    ) {
       return;
     }
 
@@ -183,13 +281,27 @@ export function ImageShiftDashboard() {
       return;
     }
 
-    setDraftCrop({
-      left: (selectedFile.crop.left / preview.width) * rect.width,
-      top: (selectedFile.crop.top / preview.height) * rect.height,
-      width: (selectedFile.crop.width / preview.width) * rect.width,
-      height: (selectedFile.crop.height / preview.height) * rect.height
+    const nextDraftCrop = {
+      left: (selectedCropLeft / preview.width) * rect.width,
+      top: (selectedCropTop / preview.height) * rect.height,
+      width: (selectedCropWidth / preview.width) * rect.width,
+      height: (selectedCropHeight / preview.height) * rect.height
+    };
+
+    setDraftCrop((current) => {
+      if (
+        current &&
+        Math.abs(current.left - nextDraftCrop.left) < 1 &&
+        Math.abs(current.top - nextDraftCrop.top) < 1 &&
+        Math.abs(current.width - nextDraftCrop.width) < 1 &&
+        Math.abs(current.height - nextDraftCrop.height) < 1
+      ) {
+        return current;
+      }
+
+      return nextDraftCrop;
     });
-  }, [activeMode, preview, selectedFile]);
+  }, [activeMode, dragState, preview, selectedCropHeight, selectedCropLeft, selectedCropTop, selectedCropWidth]);
 
   useEffect(() => {
     if (!dragState || !preview || !imageRef.current) {
@@ -382,9 +494,9 @@ export function ImageShiftDashboard() {
       inputPath: file.inputPath,
       outputFormat: getOutputFormatFromPath(file.inputPath),
       resize: {
-        width: Number(width),
-        height: Number(height),
-        fit: "fill"
+        width: width ? Number(width) : undefined,
+        height: height ? Number(height) : undefined,
+        fit: "inside"
       }
     }));
   }
@@ -405,8 +517,8 @@ export function ImageShiftDashboard() {
       return;
     }
 
-    if (effectiveMode === "Resize" && (!width || !height)) {
-      setActionError("Resize mode requires both width and height.");
+    if (effectiveMode === "Resize" && (!width && !height)) {
+      setActionError("Resize mode requires a width or height.");
       return;
     }
 
@@ -514,11 +626,17 @@ export function ImageShiftDashboard() {
     };
   }
 
+  function capturePointer(event: React.PointerEvent<HTMLElement>) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
   function onStagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!preview) {
       return;
     }
 
+    capturePointer(event);
     const local = getLocalPoint(event.clientX, event.clientY);
     if (!local) {
       return;
@@ -543,6 +661,7 @@ export function ImageShiftDashboard() {
       return;
     }
 
+    capturePointer(event);
     event.stopPropagation();
     const local = getLocalPoint(event.clientX, event.clientY);
     if (!local) {
@@ -563,6 +682,7 @@ export function ImageShiftDashboard() {
       return;
     }
 
+    capturePointer(event);
     event.stopPropagation();
     const local = getLocalPoint(event.clientX, event.clientY);
     if (!local) {
@@ -610,7 +730,7 @@ export function ImageShiftDashboard() {
           </div>
         </aside>
 
-        <main className="p-6">
+        <main className="overflow-x-hidden p-6">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{activeMode}</div>
@@ -638,16 +758,29 @@ export function ImageShiftDashboard() {
           {actionError ? <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionError}</div> : null}
 
           {activeMode !== "Export" ? (
-            <div className="grid grid-cols-[260px_1fr_320px] gap-6">
+            <div className="grid grid-cols-[260px_minmax(0,1fr)_320px] gap-6">
               <FileListPanel files={files} onClear={clearFiles} onDropFiles={appendImportedFiles} onRemove={removeFile} onSelect={setSelectedFileId} selectedFileId={selectedFileId} />
 
-              {activeMode === "Convert" ? <ConvertSummaryPanel files={files} selectedFile={selectedFile} targetFormat={outputFormat.toUpperCase()} /> : null}
+              {activeMode === "Convert" ? (
+                <ConvertSummaryPanel
+                  estimatedOutputSizeBytes={estimatedOutputSizeBytes}
+                  exportedOutputSizeBytes={selectedResult?.outputSizeBytes}
+                  estimateError={estimateError}
+                  estimating={estimating}
+                  files={files}
+                  selectedFile={selectedFile}
+                  targetFormat={outputFormat.toUpperCase()}
+                />
+              ) : null}
               {activeMode === "Compress" ? (
                 <CompressPreviewPanel
                   afterPreview={afterPreview}
                   afterPreviewError={afterPreviewError}
                   beforePreview={preview}
                   beforePreviewError={previewError}
+                  estimatedOutputSizeBytes={estimatedOutputSizeBytes}
+                  estimateError={estimateError}
+                  estimating={estimating}
                   outputSizeBytes={selectedResult?.outputSizeBytes}
                   quality={quality}
                   sourceSizeBytes={selectedFile?.sizeBytes}
@@ -665,7 +798,16 @@ export function ImageShiftDashboard() {
                   selectedFileName={selectedFile?.name}
                 />
               ) : null}
-              {activeMode === "Resize" ? <ResizePreviewPanel height={height} preview={preview} previewError={previewError} width={width} /> : null}
+              {activeMode === "Resize" ? (
+                <ResizePreviewPanel
+                  height={height}
+                  preview={preview}
+                  previewError={previewError}
+                  sourceHeight={preview?.height}
+                  sourceWidth={preview?.width}
+                  width={width}
+                />
+              ) : null}
 
               <div className="space-y-4">
                 {activeMode === "Convert" ? (

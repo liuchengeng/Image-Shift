@@ -22,6 +22,8 @@ export type CropRect = {
 export type PreviewImage = {
   width: number;
   height: number;
+  displayWidth: number;
+  displayHeight: number;
   dataUrl: string;
 };
 
@@ -49,6 +51,12 @@ export type ImageJobResult = {
     message: string;
   };
 };
+
+export type ImageJobEstimate = {
+  outputSizeBytes: number;
+};
+
+export type ImageJobPreview = PreviewImage & ImageJobEstimate;
 
 export type BatchProcessResult = {
   results: ImageJobResult[];

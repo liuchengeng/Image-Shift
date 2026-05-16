@@ -97,7 +97,7 @@ export function AspectRatioCard({
 
   return (
     <div className="rounded-2xl border bg-white p-4">
-      <div className="mb-3 font-medium">Aspect ratio</div>
+      <div className="mb-3 font-medium">Crop shape</div>
       {options.map((option) => (
         <button
           key={option}
@@ -123,10 +123,10 @@ export function CropFieldsCard({
 }) {
   return (
     <div className="rounded-2xl border bg-white p-4">
-      <div className="mb-2 font-medium">Position</div>
+      <div className="mb-2 font-medium">Crop area (px)</div>
       <div className="grid grid-cols-2 gap-2 text-sm">
-        <input onChange={(event) => onChange("left", event.target.value)} placeholder="X" value={crop?.left ?? ""} />
-        <input onChange={(event) => onChange("top", event.target.value)} placeholder="Y" value={crop?.top ?? ""} />
+        <input onChange={(event) => onChange("left", event.target.value)} placeholder="Left" value={crop?.left ?? ""} />
+        <input onChange={(event) => onChange("top", event.target.value)} placeholder="Top" value={crop?.top ?? ""} />
         <input onChange={(event) => onChange("width", event.target.value)} placeholder="Width" value={crop?.width ?? ""} />
         <input onChange={(event) => onChange("height", event.target.value)} placeholder="Height" value={crop?.height ?? ""} />
       </div>
@@ -175,13 +175,13 @@ export function ResizeFieldsCard({
 }) {
   return (
     <div className="rounded-2xl border bg-white p-4">
-      <div className="mb-2 font-medium">Custom size</div>
+      <div className="mb-2 font-medium">Max size</div>
       <div className="grid grid-cols-2 gap-2">
-        <input inputMode="numeric" onChange={(event) => onWidthChange(event.target.value)} placeholder="Width" value={width} />
-        <input inputMode="numeric" onChange={(event) => onHeightChange(event.target.value)} placeholder="Height" value={height} />
+        <input inputMode="numeric" onChange={(event) => onWidthChange(event.target.value)} placeholder="Max width" value={width} />
+        <input inputMode="numeric" onChange={(event) => onHeightChange(event.target.value)} placeholder="Max height" value={height} />
       </div>
       <label className="mt-3 flex items-center justify-between text-sm text-slate-600">
-        Lock ratio
+        Sync fields
         <input checked={lockRatio} className="h-4 w-4" onChange={(event) => onLockRatioChange(event.target.checked)} type="checkbox" />
       </label>
     </div>
