@@ -114,14 +114,14 @@ export function CropEditorPanel({
             {previewError || (selectedFileName ? "Loading preview..." : "Select a file from the list.")}
           </div>
         ) : (
-          <div className="relative max-h-full max-w-full" onPointerDown={onStagePointerDown}>
+          <div className="relative max-h-full max-w-full touch-none" onPointerDown={onStagePointerDown}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img alt={selectedFileName ?? "Preview"} className="block max-h-[70vh] max-w-full select-none object-contain" ref={imageRef} src={preview.dataUrl} />
             {draftCrop ? (
               <>
                 <div className="pointer-events-none absolute inset-0 bg-slate-950/30" />
                 <div
-                  className="absolute border-2 border-white bg-transparent shadow-[0_0_0_9999px_rgba(15,23,42,0.16)]"
+                  className="absolute border-2 border-white bg-transparent shadow-[0_0_0_9999px_rgba(15,23,42,0.16)] touch-none"
                   onPointerDown={onCropPointerDown}
                   style={{ left: draftCrop.left, top: draftCrop.top, width: draftCrop.width, height: draftCrop.height }}
                 >

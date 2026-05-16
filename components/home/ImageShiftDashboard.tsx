@@ -515,9 +515,12 @@ export function ImageShiftDashboard() {
   }
 
   function onStagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (!preview) {
+    if (!preview || event.button !== 0) {
       return;
     }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
 
     const local = getLocalPoint(event.clientX, event.clientY);
     if (!local) {
@@ -539,11 +542,14 @@ export function ImageShiftDashboard() {
   }
 
   function onCropPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (!draftCrop) {
+    if (!draftCrop || event.button !== 0) {
       return;
     }
 
     event.stopPropagation();
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
     const local = getLocalPoint(event.clientX, event.clientY);
     if (!local) {
       return;
@@ -559,11 +565,14 @@ export function ImageShiftDashboard() {
   }
 
   function onHandlePointerDown(handle: CropHandle, event: React.PointerEvent<HTMLButtonElement>) {
-    if (!draftCrop) {
+    if (!draftCrop || event.button !== 0) {
       return;
     }
 
     event.stopPropagation();
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
     const local = getLocalPoint(event.clientX, event.clientY);
     if (!local) {
       return;
