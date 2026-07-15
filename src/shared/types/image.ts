@@ -19,6 +19,50 @@ export type CropRect = {
   height: number;
 };
 
+export type SubjectBounds = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+export type LayoutAnalysisMethod = "alpha" | "edge" | "ai";
+
+export type LayoutReferenceAnalysis = {
+  width: number;
+  height: number;
+  bounds: SubjectBounds;
+  background:
+    | { mode: "transparent" }
+    | {
+        mode: "solid";
+        color: { r: number; g: number; b: number; alpha: number };
+      };
+  confidence: number;
+  method: LayoutAnalysisMethod;
+};
+
+export type LayoutAdjustment = {
+  scaleMultiplier: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+export type LayoutMatchOptions = {
+  reference: LayoutReferenceAnalysis;
+  adjustment: LayoutAdjustment;
+};
+
+export type LayoutMatchResult = {
+  targetBounds: SubjectBounds;
+  autoScale: number;
+  finalScale: number;
+  offsetX: number;
+  offsetY: number;
+  confidence: number;
+  method: LayoutAnalysisMethod;
+};
+
 export type PreviewImage = {
   width: number;
   height: number;
@@ -34,6 +78,8 @@ export type ImageJob = {
   quality?: number;
   crop?: CropRect;
   resize?: ResizeOptions;
+  removeBackground?: boolean;
+  layoutMatch?: LayoutMatchOptions;
 };
 
 export type BatchProcessRequest = {
@@ -56,7 +102,10 @@ export type ImageJobEstimate = {
   outputSizeBytes: number;
 };
 
-export type ImageJobPreview = PreviewImage & ImageJobEstimate;
+export type ImageJobPreview = PreviewImage &
+  ImageJobEstimate & {
+    layoutMatch?: LayoutMatchResult;
+  };
 
 export type BatchProcessResult = {
   results: ImageJobResult[];

@@ -1,6 +1,6 @@
-import type { PointerEvent, RefObject } from "react";
-import type { PreviewImage } from "@/src/shared/types/image";
-import { formatBytes, type CropBox, type CropHandle, type QueueFile } from "@/components/home/dashboard-utils";
+import { useLayoutEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
+import type { LayoutMatchResult, PreviewImage } from "@/src/shared/types/image";
+import { fitDimensions, formatBytes, type CropBox, type CropHandle, type QueueFile } from "@/components/home/dashboard-utils";
 
 type ConvertSummaryPanelProps = {
   files: QueueFile[];
@@ -21,6 +21,7 @@ type CropEditorPanelProps = {
   onStagePointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onCropPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onHandlePointerDown: (handle: CropHandle, event: PointerEvent<HTMLButtonElement>) => void;
+  onRenderedSizeChange: (width: number, height: number) => void;
 };
 
 type ResizePreviewPanelProps = {
@@ -45,42 +46,57 @@ type CompressPreviewPanelProps = {
   quality: number;
 };
 
+type BackgroundRemovalPanelProps = {
+  beforePreview: PreviewImage | null;
+  beforePreviewError: string;
+  afterPreview: PreviewImage | null;
+  afterPreviewError: string;
+  estimating: boolean;
+};
+
+type LayoutMatchPreviewPanelProps = {
+  referencePreview: PreviewImage | null;
+  referenceError: string;
+  matchedPreview: PreviewImage | null;
+  matchedError: string;
+  referenceName?: string;
+  targetName?: string;
+  result?: LayoutMatchResult;
+  processing: boolean;
+  referenceTransparent: boolean;
+};
+
 export function ConvertSummaryPanel({ files, selectedFile, targetFormat, estimatedOutputSizeBytes, exportedOutputSizeBytes, estimateError, estimating }: ConvertSummaryPanelProps) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="font-medium">Convert batch</div>
-        <div className="text-xs text-slate-500">No preview in convert mode</div>
-      </div>
+    <div className="min-w-0 overflow-hidden rounded-xl border bg-white p-3">
+      <div className="mb-2 font-medium">格式转换</div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border bg-slate-50 p-4">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Selection</div>
-          <div className="mt-3 text-3xl font-semibold text-slate-900">{files.length}</div>
-          <div className="mt-1 text-sm text-slate-500">images queued for conversion</div>
+      <div className="grid grid-cols-2 divide-x rounded-lg border bg-slate-50">
+        <div className="flex items-baseline justify-between gap-3 p-3">
+          <div className="text-xs text-slate-500">文件</div>
+          <div className="font-semibold text-slate-900">{files.length} 张</div>
         </div>
 
-        <div className="rounded-xl border bg-slate-50 p-4">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Target format</div>
-          <div className="mt-3 text-3xl font-semibold text-slate-900">{targetFormat}</div>
-          <div className="mt-1 text-sm text-slate-500">exported format for the current batch</div>
+        <div className="flex items-baseline justify-between gap-3 p-3">
+          <div className="text-xs text-slate-500">输出</div>
+          <div className="font-semibold text-slate-900">{targetFormat}</div>
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border p-4">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Current file</div>
+      <div className="mt-3 rounded-lg border p-3">
+        <div className="text-xs font-medium text-slate-500">当前文件</div>
         {selectedFile ? (
-          <div className="mt-3 space-y-2 text-sm text-slate-600">
+          <div className="mt-2 space-y-1 text-sm text-slate-600">
             <div className="font-medium text-slate-900">{selectedFile.name}</div>
-            <div>Original size: {formatBytes(selectedFile.sizeBytes)}</div>
-            <div>Export as: {targetFormat}</div>
+            <div>原始大小：{formatBytes(selectedFile.sizeBytes)}</div>
+            <div>导出格式：{targetFormat}</div>
             <div>
-              Estimated output: {estimating ? "Calculating..." : estimateError ? estimateError : formatBytes(estimatedOutputSizeBytes)}
+              预计大小：{estimating ? "计算中…" : estimateError ? estimateError : formatBytes(estimatedOutputSizeBytes)}
             </div>
-            {exportedOutputSizeBytes ? <div>Exported size: {formatBytes(exportedOutputSizeBytes)}</div> : null}
+            {exportedOutputSizeBytes ? <div>已导出大小：{formatBytes(exportedOutputSizeBytes)}</div> : null}
           </div>
         ) : (
-          <div className="mt-3 text-sm text-slate-500">Select a file from the queue.</div>
+          <div className="mt-2 text-sm text-slate-500">未选择图片</div>
         )}
       </div>
     </div>
@@ -89,19 +105,77 @@ export function ConvertSummaryPanel({ files, selectedFile, targetFormat, estimat
 
 export function CompressPreviewPanel(props: CompressPreviewPanelProps) {
   return (
-    <div className="rounded-2xl border bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="font-medium">Compressed preview</div>
-        <div className="text-xs text-slate-500">Quality {props.quality}</div>
+    <div className="rounded-xl border bg-white p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="font-medium">压缩预览</div>
+        <div className="text-xs text-slate-500">质量 {props.quality}</div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <PreviewSlot label="Original" preview={props.beforePreview} error={props.beforePreviewError} />
-        <PreviewSlot label="Compressed" preview={props.afterPreview} error={props.afterPreviewError} />
+      <div className="grid grid-cols-2 gap-3">
+        <PreviewSlot label="原图" preview={props.beforePreview} error={props.beforePreviewError} />
+        <PreviewSlot label="压缩后" preview={props.afterPreview} error={props.afterPreviewError} />
       </div>
-      <div className="mt-4 text-xs text-slate-500">
-        Original {formatBytes(props.sourceSizeBytes)} {"->"} Estimated {props.estimating ? "Calculating..." : props.estimateError ? props.estimateError : formatBytes(props.estimatedOutputSizeBytes)}
-        {props.outputSizeBytes ? ` -> Exported ${formatBytes(props.outputSizeBytes)}` : ""}
+      <div className="mt-2 text-xs text-slate-500">
+        原始 {formatBytes(props.sourceSizeBytes)} {"→"} 预计 {props.estimating ? "计算中…" : props.estimateError ? props.estimateError : formatBytes(props.estimatedOutputSizeBytes)}
+        {props.outputSizeBytes ? ` → 已导出 ${formatBytes(props.outputSizeBytes)}` : ""}
       </div>
+    </div>
+  );
+}
+
+export function BackgroundRemovalPanel(props: BackgroundRemovalPanelProps) {
+  return (
+    <div className="rounded-xl border bg-white p-3">
+      <div className="mb-2 flex items-center justify-between gap-4">
+        <div className="font-medium">智能抠图</div>
+        <div className="text-xs text-slate-500">{props.estimating ? "正在识别主体…" : "本机处理"}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <PreviewSlot label="原图" preview={props.beforePreview} error={props.beforePreviewError} />
+        <PreviewSlot checkerboard label="透明背景" preview={props.afterPreview} error={props.afterPreviewError || (props.estimating ? "正在处理中…" : "")} />
+      </div>
+    </div>
+  );
+}
+
+export function LayoutMatchPreviewPanel(props: LayoutMatchPreviewPanelProps) {
+  const methodLabel = props.result?.method === "alpha" ? "透明通道" : props.result?.method === "edge" ? "边缘识别" : "AI";
+
+  return (
+    <div className="min-w-0 overflow-hidden rounded-xl border bg-white p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <div className="font-medium">参考图 / 匹配结果</div>
+          <div className="mt-0.5 max-w-[420px] truncate text-xs text-slate-500">
+            {props.targetName ? `目标：${props.targetName}` : "请从文件队列中选择目标图。"}
+          </div>
+        </div>
+        {props.processing ? <div className="shrink-0 text-xs text-slate-500">正在识别并匹配…</div> : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <PreviewSlot
+          checkerboard={props.referenceTransparent}
+          error={props.referenceError || (props.referenceName ? "正在载入参考图…" : "请选择参考图。")}
+          label="参考图"
+          preview={props.referencePreview}
+        />
+        <PreviewSlot
+          checkerboard
+          error={props.matchedError || (props.processing ? "正在生成匹配预览…" : "请选择参考图和目标图。")}
+          label="匹配结果"
+          preview={props.matchedPreview}
+        />
+      </div>
+
+      {props.result ? (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <span>自动缩放 <strong className="font-medium text-slate-900">{(props.result.autoScale * 100).toFixed(2)}%</strong></span>
+          <span>最终缩放 <strong className="font-medium text-slate-900">{(props.result.finalScale * 100).toFixed(2)}%</strong></span>
+          <span>偏移 <strong className="font-medium text-slate-900">{Math.round(props.result.offsetX)}, {Math.round(props.result.offsetY)} px</strong></span>
+          <span>置信度 <strong className="font-medium text-slate-900">{Math.round(props.result.confidence * 100)}%</strong></span>
+          <span className="text-slate-400">{methodLabel}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -114,39 +188,64 @@ export function CropEditorPanel({
   imageRef,
   onStagePointerDown,
   onCropPointerDown,
-  onHandlePointerDown
+  onHandlePointerDown,
+  onRenderedSizeChange
 }: CropEditorPanelProps) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [renderedSize, setRenderedSize] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !preview) {
+      setRenderedSize({ width: 0, height: 0 });
+      onRenderedSizeChange(0, 0);
+      return;
+    }
+
+    const updateSize = () => {
+      const nextSize = fitDimensions(
+        preview.displayWidth,
+        preview.displayHeight,
+        Math.max(0, viewport.clientWidth - 32),
+        Math.max(0, viewport.clientHeight - 32)
+      );
+      setRenderedSize((current) => current.width === nextSize.width && current.height === nextSize.height ? current : nextSize);
+      onRenderedSizeChange(nextSize.width, nextSize.height);
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [onRenderedSizeChange, preview]);
+
   return (
-    <div className="rounded-2xl border bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="font-medium">Crop editor</div>
-        <div className="text-xs text-slate-500">Drag the box or use corners to resize</div>
+    <div className="rounded-xl border bg-white p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="font-medium">裁剪编辑器</div>
+        <div className="text-xs text-slate-500">拖动选框，或拖动四角调整大小</div>
       </div>
-      <div className="relative h-[360px] overflow-hidden rounded-xl border bg-slate-100">
+      <div ref={viewportRef} className="relative flex h-[360px] items-center justify-center overflow-hidden rounded-lg border bg-slate-100 p-3">
         {!preview ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-500">
-            {previewError || (selectedFileName ? "Loading preview..." : "Select a file from the list.")}
+            {previewError || (selectedFileName ? "正在载入预览…" : "请从文件队列中选择图片。")}
           </div>
         ) : (
-          <div className="h-full w-full overflow-auto overscroll-contain">
+          renderedSize.width && renderedSize.height ? (
             <div
-              className="flex min-h-full min-w-full items-center justify-center p-4"
-              style={{ height: `max(100%, ${preview.displayHeight + 32}px)`, width: `max(100%, ${preview.displayWidth + 32}px)` }}
+              className="relative shrink-0 touch-none"
+              onPointerDown={onStagePointerDown}
+              style={{ height: renderedSize.height, width: renderedSize.width }}
             >
-              <div
-                className="relative shrink-0 touch-none"
-                onPointerDown={onStagePointerDown}
-                style={{ height: preview.displayHeight, width: preview.displayWidth }}
-              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  alt={selectedFileName ?? "Preview"}
+                  alt={selectedFileName ?? "预览"}
                   className="block select-none"
                   draggable={false}
                   onDragStart={(event) => event.preventDefault()}
                   ref={imageRef}
                   src={preview.dataUrl}
-                  style={{ height: preview.displayHeight, width: preview.displayWidth }}
+                  style={{ height: renderedSize.height, width: renderedSize.width }}
                 />
                 {draftCrop ? (
                   <>
@@ -178,9 +277,8 @@ export function CropEditorPanel({
                     </div>
                   </>
                 ) : null}
-              </div>
             </div>
-          </div>
+          ) : null
         )}
       </div>
     </div>
@@ -189,53 +287,42 @@ export function CropEditorPanel({
 
 export function ResizePreviewPanel({ preview, previewError, width, height, sourceWidth, sourceHeight }: ResizePreviewPanelProps) {
   return (
-    <div className="rounded-2xl border bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="font-medium">Resize output</div>
-        <div className="text-xs text-slate-500">Keeps original proportions</div>
+    <div className="rounded-xl border bg-white p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="font-medium">尺寸调整预览</div>
+        <div className="text-xs text-slate-500">保持原始比例</div>
       </div>
-      <div className="aspect-video rounded-xl border bg-slate-100">
+      <div className="aspect-video rounded-lg border bg-slate-100">
         {preview ? (
           <div className="flex h-full items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt="Resize preview" className="max-h-full max-w-full object-contain" src={preview.dataUrl} />
+            <img alt="尺寸调整预览" className="max-h-full max-w-full object-contain" src={preview.dataUrl} />
           </div>
         ) : (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-500">
-            {previewError || "Select a file to inspect resize output."}
+            {previewError || "请选择图片以查看尺寸调整结果。"}
           </div>
         )}
       </div>
-      <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-        <div className="rounded-xl border bg-slate-50 p-3">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Original</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">
-            {sourceWidth && sourceHeight ? `${sourceWidth} x ${sourceHeight}` : "--"}
-          </div>
-        </div>
-        <div className="rounded-xl border bg-slate-50 p-3">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Max width</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{width || "Auto"}</div>
-        </div>
-        <div className="rounded-xl border bg-slate-50 p-3">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Max height</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{height || "Auto"}</div>
-        </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <span>原始尺寸 <strong className="font-medium text-slate-900">{sourceWidth && sourceHeight ? `${sourceWidth} × ${sourceHeight}` : "—"}</strong></span>
+        <span>最大宽度 <strong className="font-medium text-slate-900">{width || "自动"}</strong></span>
+        <span>最大高度 <strong className="font-medium text-slate-900">{height || "自动"}</strong></span>
       </div>
     </div>
   );
 }
 
-function PreviewSlot({ label, preview, error }: { label: string; preview: PreviewImage | null; error: string }) {
+function PreviewSlot({ label, preview, error, checkerboard = false }: { label: string; preview: PreviewImage | null; error: string; checkerboard?: boolean }) {
   return (
-    <div className="rounded-xl border bg-slate-100 p-3">
-      <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{label}</div>
-      <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-white">
+    <div className="rounded-lg border bg-slate-100 p-2">
+      <div className="mb-1.5 text-xs font-medium text-slate-500">{label}</div>
+      <div className={`flex h-[52vh] min-h-[320px] max-h-[460px] items-center justify-center overflow-hidden rounded-md border ${checkerboard ? "transparent-grid" : "bg-white"}`}>
         {preview ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img alt={label} className="max-h-full max-w-full object-contain" src={preview.dataUrl} />
         ) : (
-          <div className="px-6 text-center text-sm text-slate-500">{error || "No preview available."}</div>
+          <div className="px-4 text-center text-sm text-slate-500">{error || "暂无预览。"}</div>
         )}
       </div>
     </div>
