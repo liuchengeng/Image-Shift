@@ -6,7 +6,16 @@ const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const isDev = process.env.NODE_ENV === "development";
 const VALID_INPUT_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const VALID_FORMATS = new Set(["jpeg", "png", "webp"]);
+const VALID_LAYOUT_METHODS = new Set(["alpha", "edge", "ai"]);
 const SHARP_WORKER_PATH = path.join(__dirname, "sharp-worker.cjs");
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
 
 function ensurePositiveInteger(value) {
   return value === undefined || (Number.isInteger(value) && value > 0);
@@ -35,6 +44,99 @@ function validateCrop(crop) {
   return errors;
 }
 
+function validateSubjectBounds(bounds, canvasWidth, canvasHeight) {
+  if (!isRecord(bounds)) {
+    return ["Layout subject bounds are required."];
+  }
+
+  const values = [bounds.left, bounds.top, bounds.width, bounds.height];
+  if (
+    !values.every(isFiniteNumber) ||
+    bounds.left < 0 ||
+    bounds.top < 0 ||
+    bounds.width <= 0 ||
+    bounds.height <= 0
+  ) {
+    return ["Layout subject bounds must use finite, non-negative coordinates and positive dimensions."];
+  }
+
+  if (bounds.left + bounds.width > canvasWidth || bounds.top + bounds.height > canvasHeight) {
+    return ["Layout subject bounds must fit inside the reference canvas."];
+  }
+
+  return [];
+}
+
+function validateLayoutReference(reference) {
+  if (!isRecord(reference)) {
+    return ["Layout reference analysis is required."];
+  }
+
+  const errors = [];
+  if (
+    !Number.isInteger(reference.width) ||
+    reference.width <= 0 ||
+    !Number.isInteger(reference.height) ||
+    reference.height <= 0
+  ) {
+    errors.push("Layout reference dimensions must be positive integers.");
+  } else {
+    errors.push(...validateSubjectBounds(reference.bounds, reference.width, reference.height));
+  }
+
+  if (!isFiniteNumber(reference.confidence) || reference.confidence < 0 || reference.confidence > 1) {
+    errors.push("Layout reference confidence must be between 0 and 1.");
+  }
+
+  if (!VALID_LAYOUT_METHODS.has(reference.method)) {
+    errors.push("Layout reference method must be alpha, edge, or ai.");
+  }
+
+  if (!isRecord(reference.background) || !["transparent", "solid"].includes(reference.background.mode)) {
+    errors.push("Layout background must be transparent or solid.");
+  } else if (reference.background.mode === "solid") {
+    const color = reference.background.color;
+    if (
+      !isRecord(color) ||
+      ![color.r, color.g, color.b, color.alpha].every(
+        (channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255
+      )
+    ) {
+      errors.push("Layout solid background RGBA channels must be integers from 0 to 255.");
+    }
+  }
+
+  return errors;
+}
+
+function validateLayoutAdjustment(adjustment) {
+  if (!isRecord(adjustment)) {
+    return ["Layout adjustment is required."];
+  }
+
+  const errors = [];
+  if (!isFiniteNumber(adjustment.scaleMultiplier) || adjustment.scaleMultiplier <= 0) {
+    errors.push("Layout scale multiplier must be a finite number greater than 0.");
+  }
+
+  if (!isFiniteNumber(adjustment.offsetX) || !isFiniteNumber(adjustment.offsetY)) {
+    errors.push("Layout X/Y offsets must be finite numbers.");
+  }
+
+  return errors;
+}
+
+function validateLayoutMatch(layoutMatch) {
+  if (!isRecord(layoutMatch)) {
+    return ["Layout match options are required."];
+  }
+
+  return [
+    ...validateLayoutReference(layoutMatch.reference),
+    ...validateLayoutAdjustment(layoutMatch.adjustment)
+  ];
+}
+
 function validateJob(job) {
   const errors = [];
 
@@ -52,8 +154,20 @@ function validateJob(job) {
     errors.push("Quality must be between 1 and 100.");
   }
 
+  if (job.removeBackground && job.outputFormat === "jpeg") {
+    errors.push("Background removal output must be PNG or WEBP.");
+  }
+
   if (job.resize && (!ensurePositiveInteger(job.resize.width) || !ensurePositiveInteger(job.resize.height))) {
     errors.push("Resize width and height must be positive integers.");
+  }
+
+  if (job.layoutMatch !== undefined) {
+    errors.push(...validateLayoutMatch(job.layoutMatch));
+
+    if (job.crop || job.resize || job.removeBackground) {
+      errors.push("Layout matching cannot be combined with crop, resize, or background removal.");
+    }
   }
 
   return errors.concat(validateCrop(job.crop));
@@ -152,7 +266,13 @@ async function processSingleJob(job, outputDir) {
   }
 }
 
-function runSharpWorker(payload, timeoutMs = 60000) {
+function getWorkerTimeout(payload) {
+  return payload?.job?.removeBackground || payload?.job?.layoutMatch || payload?.type === "analyze-layout-reference"
+    ? 240000
+    : 60000;
+}
+
+function runSharpWorker(payload, timeoutMs = getWorkerTimeout(payload)) {
   return new Promise((resolve, reject) => {
     const worker = fork(SHARP_WORKER_PATH, {
       stdio: ["ignore", "ignore", "ignore", "ipc"]
@@ -242,6 +362,20 @@ function registerIpcHandlers() {
     return result.canceled ? [] : getImportedFiles(result.filePaths);
   });
 
+  ipcMain.handle("image:pick-reference-file", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    const [reference] = await getImportedFiles([result.filePaths[0]]);
+    return reference ?? null;
+  });
+
   ipcMain.handle("image:pick-output-dir", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory", "createDirectory"]
@@ -262,6 +396,19 @@ function registerIpcHandlers() {
     }
 
     return createPreview(inputPath);
+  });
+
+  ipcMain.handle("image:analyze-layout-reference", async (_event, inputPath) => {
+    const extension = path.extname(typeof inputPath === "string" ? inputPath : "").toLowerCase();
+
+    if (!VALID_INPUT_EXTENSIONS.has(extension)) {
+      throw new Error("This file format is not supported for layout matching.");
+    }
+
+    return runSharpWorker({
+      type: "analyze-layout-reference",
+      inputPath
+    });
   });
 
   ipcMain.handle("image:estimate-job", async (_event, job) => {
