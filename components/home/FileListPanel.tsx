@@ -1,5 +1,7 @@
 import type { ImportedImageFile } from "@/src/shared/types/image";
 import { formatBytes, getDroppedFiles, type QueueFile } from "@/components/home/dashboard-utils";
+import { useLanguage } from "@/components/home/LanguageProvider";
+import { localizeErrorMessage } from "@/components/home/i18n";
 
 type FileListPanelProps = {
   files: QueueFile[];
@@ -20,6 +22,8 @@ export function FileListPanel({
   onDropFiles,
   showLayoutStatus = false
 }: FileListPanelProps) {
+  const { language, t } = useLanguage();
+
   return (
     <div
       className="flex max-h-[calc(100vh-168px)] min-h-0 flex-col self-start rounded-xl border bg-white p-3"
@@ -30,15 +34,15 @@ export function FileListPanel({
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="font-medium">文件队列 <span className="ml-1 text-xs font-normal text-slate-400">{files.length}</span></div>
+        <div className="font-medium">{t("queue.title")} <span className="ml-1 text-xs font-normal text-slate-400">{t("queue.count", { count: files.length })}</span></div>
         <button className="text-xs text-slate-500 transition hover:text-slate-900" onClick={onClear} type="button">
-          清空
+          {t("common.clear")}
         </button>
       </div>
       <div className="min-h-0 space-y-1.5 overflow-y-auto pr-1">
         {files.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-8 text-center text-sm leading-6 text-slate-500">
-            拖入 JPG、PNG 或 WEBP
+            {t("queue.dropHint")}
           </div>
         ) : (
           files.map((file) => {
@@ -49,13 +53,13 @@ export function FileListPanel({
                 key={file.id}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <button className="min-w-0 flex-1 text-left" onClick={() => onSelect(file.id)} type="button">
+                  <button aria-pressed={active} className="min-w-0 flex-1 text-left" onClick={() => onSelect(file.id)} type="button">
                     <div className="truncate text-sm font-medium">{file.name}</div>
                     <div className="mt-1 text-xs text-slate-500">{formatBytes(file.sizeBytes)}</div>
-                    {showLayoutStatus && file.layoutError ? <div className="mt-1 text-xs leading-4 text-rose-600">{file.layoutError}</div> : null}
+                    {showLayoutStatus && file.layoutError ? <div className="mt-1 text-xs leading-4 text-rose-600" role="alert">{localizeErrorMessage(file.layoutError, language)}</div> : null}
                   </button>
-                  <button className="text-xs text-slate-400 hover:text-slate-900" onClick={() => onRemove(file.id)} type="button">
-                    移除
+                  <button aria-label={`${t("common.remove")}: ${file.name}`} className="text-xs text-slate-400 hover:text-slate-900" onClick={() => onRemove(file.id)} type="button">
+                    {t("common.remove")}
                   </button>
                 </div>
               </div>

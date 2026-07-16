@@ -1,10 +1,12 @@
 import type { CropRect, ImportedImageFile, LayoutAdjustment, LayoutReferenceAnalysis, OutputFormat } from "@/src/shared/types/image";
 import { FORMAT_OPTIONS, type CropPreset } from "@/components/home/dashboard-utils";
+import { useLanguage } from "@/components/home/LanguageProvider";
+import { localizeErrorMessage } from "@/components/home/i18n";
 
 export function FormatCard({
   outputFormat,
   onChange,
-  title = "输出格式",
+  title,
   options = FORMAT_OPTIONS
 }: {
   outputFormat: OutputFormat;
@@ -12,9 +14,11 @@ export function FormatCard({
   title?: string;
   options?: { value: OutputFormat; label: string }[];
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-2xl border bg-white p-3">
-      <div className="mb-2 font-medium">{title}</div>
+      <div className="mb-2 font-medium">{title ?? t("format.outputTitle")}</div>
       <div className="grid grid-cols-2 gap-2">
         {options.map((option) => (
           <button
@@ -35,13 +39,15 @@ export function FormatCard({
 }
 
 export function QualityCard({ quality, onChange }: { quality: number; onChange: (value: number) => void }) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-2xl border bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-4">
-        <div className="font-medium">质量</div>
+        <div className="font-medium">{t("quality.title")}</div>
         <div className="text-sm text-slate-500">{quality}</div>
       </div>
-      <input aria-label="质量" className="w-full accent-slate-900" max={100} min={1} onChange={(event) => onChange(Number(event.target.value))} type="range" value={quality} />
+      <input aria-label={t("quality.ariaLabel")} className="w-full accent-slate-900" max={100} min={1} onChange={(event) => onChange(Number(event.target.value))} type="range" value={quality} />
     </div>
   );
 }
@@ -59,40 +65,45 @@ export function LayoutReferenceCard({
   analyzing: boolean;
   onChoose: () => void;
 }) {
+  const { language, t } = useLanguage();
   const methodLabel = analysis?.method === "alpha"
-    ? "透明通道"
+    ? t("reference.method.alpha")
     : analysis?.method === "edge"
-      ? "边缘检测"
+      ? t("reference.method.edge")
       : analysis?.method === "ai"
-        ? "AI"
+        ? t("reference.method.ai")
         : "";
 
   return (
     <div className="rounded-2xl border bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="font-medium">参考图</div>
-        {analysis ? <div className="text-xs text-emerald-600">已就绪</div> : null}
+        <div className="font-medium">{t("reference.title")}</div>
+        {analysis ? <div className="text-xs text-emerald-600">{t("common.ready")}</div> : null}
       </div>
       <div className="rounded-lg border bg-slate-50 p-3 text-sm">
         {referenceFile ? (
           <>
             <div className="truncate font-medium text-slate-900">{referenceFile.name}</div>
             <div className="mt-1 text-xs text-slate-500">
-              {analysis ? `${analysis.width} × ${analysis.height} px · ${Math.round(analysis.confidence * 100)}% · ${methodLabel}` : analyzing ? "正在识别主体…" : "暂无分析结果"}
+              {analysis
+                ? t("reference.analysisSummary", { width: analysis.width, height: analysis.height, confidence: Math.round(analysis.confidence * 100), method: methodLabel })
+                : analyzing
+                  ? t("reference.analyzingSubject")
+                  : t("reference.noAnalysis")}
             </div>
           </>
         ) : (
-          <div className="text-slate-500">未选择参考图</div>
+          <div className="text-slate-500">{t("reference.notSelected")}</div>
         )}
       </div>
-      {error ? <div className="mt-2 text-xs leading-5 text-rose-600">{error}</div> : null}
+      {error ? <div className="mt-2 text-xs leading-5 text-rose-600" role="alert">{localizeErrorMessage(error, language)}</div> : null}
       <button
         className="mt-2 w-full rounded-lg border px-3 py-2 text-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         disabled={analyzing}
         onClick={onChoose}
         type="button"
       >
-        {analyzing ? "正在分析…" : referenceFile ? "更换参考图" : "选择参考图"}
+        {analyzing ? t("reference.analyzing") : referenceFile ? t("reference.change") : t("reference.select")}
       </button>
     </div>
   );
@@ -109,22 +120,23 @@ export function LayoutAdjustmentCard({
   onChange: (next: LayoutAdjustment) => void;
   onReset: () => void;
 }) {
+  const { t } = useLanguage();
   const scalePercent = Number((adjustment.scaleMultiplier * 100).toFixed(2));
 
   return (
     <div className="rounded-2xl border bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="font-medium">单图微调</div>
+        <div className="font-medium">{t("adjustment.title")}</div>
         <button className="text-xs text-slate-500 hover:text-slate-900 disabled:opacity-40" disabled={disabled} onClick={onReset} type="button">
-          重置
+          {t("common.reset")}
         </button>
       </div>
 
       <label className="block text-xs text-slate-500">
-        缩放
+        {t("adjustment.scale")}
         <div className="mt-1 flex items-center gap-2">
           <input
-            aria-label="缩放滑块"
+            aria-label={t("adjustment.scaleSliderAria")}
             className="min-w-0 flex-1 accent-slate-900"
             disabled={disabled}
             max={150}
@@ -135,7 +147,7 @@ export function LayoutAdjustmentCard({
             value={Math.min(150, Math.max(50, scalePercent))}
           />
           <input
-            aria-label="缩放百分比"
+            aria-label={t("adjustment.scalePercentAria")}
             className="w-20 rounded-lg border px-2 py-1.5 text-right text-sm"
             disabled={disabled}
             max={400}
@@ -156,7 +168,7 @@ export function LayoutAdjustmentCard({
 
       <div className="mt-2 grid grid-cols-2 gap-2">
         <label className="text-xs text-slate-500">
-          X 偏移（px）
+          {t("adjustment.offsetX")}
           <input
             className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
             disabled={disabled}
@@ -168,7 +180,7 @@ export function LayoutAdjustmentCard({
           />
         </label>
         <label className="text-xs text-slate-500">
-          Y 偏移（px）
+          {t("adjustment.offsetY")}
           <input
             className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
             disabled={disabled}
@@ -199,16 +211,18 @@ export function RunCard({
   onRun: () => void;
   secondaryAction?: { label: string; onClick: () => void };
 }) {
+  const { t } = useLanguage();
+
   return (
-    <div className="rounded-2xl border bg-white p-3">
+    <div aria-busy={busy} className="rounded-2xl border bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="font-medium">导出</div>
-        <div className="text-xs text-slate-500">{files} 张</div>
+        <div className="font-medium">{t("export.title")}</div>
+        <div className="text-xs text-slate-500">{t("queue.count", { count: files })}</div>
       </div>
-      <div className="truncate rounded-lg border bg-slate-50 px-2.5 py-2 text-xs text-slate-600" title={outputDir || undefined}>{outputDir || "未选择导出文件夹"}</div>
+      <div className="truncate rounded-lg border bg-slate-50 px-2.5 py-2 text-xs text-slate-600" title={outputDir || undefined}>{outputDir || t("export.noFolder")}</div>
       <div className="mt-2 flex gap-2">
         <button className="flex-1 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50" onClick={onChooseFolder} type="button">
-          选择文件夹
+          {t("export.chooseFolder")}
         </button>
         {secondaryAction ? (
           <button className="rounded-lg border px-3 py-2 text-sm hover:bg-slate-50" onClick={secondaryAction.onClick} type="button">
@@ -222,7 +236,7 @@ export function RunCard({
         onClick={onRun}
         type="button"
       >
-        {busy ? "正在处理…" : "批量导出"}
+        {busy ? t("common.processing") : t("export.batch")}
       </button>
     </div>
   );
@@ -235,11 +249,12 @@ export function AspectRatioCard({
   cropPreset: CropPreset;
   onChange: (preset: CropPreset) => void;
 }) {
+  const { t } = useLanguage();
   const options: CropPreset[] = ["free", "1:1", "4:5", "16:9"];
 
   return (
     <div className="rounded-2xl border bg-white p-3">
-      <div className="mb-2 font-medium">裁剪比例</div>
+      <div className="mb-2 font-medium">{t("crop.ratioTitle")}</div>
       {options.map((option) => (
         <button
           aria-pressed={cropPreset === option}
@@ -250,7 +265,7 @@ export function AspectRatioCard({
           onClick={() => onChange(option)}
           type="button"
         >
-          {option === "free" ? "自由" : option}
+          {option === "free" ? t("crop.free") : option}
         </button>
       ))}
     </div>
@@ -264,20 +279,22 @@ export function CropFieldsCard({
   crop?: CropRect;
   onChange: (field: keyof CropRect, value: string) => void;
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-2xl border bg-white p-3">
-      <div className="mb-2 font-medium">裁剪区域（px）</div>
+      <div className="mb-2 font-medium">{t("crop.regionTitle")}</div>
       <div className="grid grid-cols-2 gap-2 text-sm">
-        <label className="text-xs text-slate-500">左
+        <label className="text-xs text-slate-500">{t("crop.left")}
           <input className="mt-1 w-full min-w-0 rounded-lg border px-2 py-1.5 text-sm text-slate-900" inputMode="numeric" onChange={(event) => onChange("left", event.target.value)} value={crop?.left ?? ""} />
         </label>
-        <label className="text-xs text-slate-500">上
+        <label className="text-xs text-slate-500">{t("crop.top")}
           <input className="mt-1 w-full min-w-0 rounded-lg border px-2 py-1.5 text-sm text-slate-900" inputMode="numeric" onChange={(event) => onChange("top", event.target.value)} value={crop?.top ?? ""} />
         </label>
-        <label className="text-xs text-slate-500">宽
+        <label className="text-xs text-slate-500">{t("crop.width")}
           <input className="mt-1 w-full min-w-0 rounded-lg border px-2 py-1.5 text-sm text-slate-900" inputMode="numeric" onChange={(event) => onChange("width", event.target.value)} value={crop?.width ?? ""} />
         </label>
-        <label className="text-xs text-slate-500">高
+        <label className="text-xs text-slate-500">{t("crop.height")}
           <input className="mt-1 w-full min-w-0 rounded-lg border px-2 py-1.5 text-sm text-slate-900" inputMode="numeric" onChange={(event) => onChange("height", event.target.value)} value={crop?.height ?? ""} />
         </label>
       </div>
@@ -292,9 +309,11 @@ export function ResizePresetCard({
   presets: { label: string; width: number; height: number }[];
   onApply: (width: number, height: number) => void;
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-2xl border bg-white p-3">
-      <div className="mb-2 font-medium">常用尺寸</div>
+      <div className="mb-2 font-medium">{t("resize.presetsTitle")}</div>
       {presets.map((preset) => (
         <button
           key={preset.label}
@@ -324,19 +343,21 @@ export function ResizeFieldsCard({
   onHeightChange: (value: string) => void;
   onLockRatioChange: (value: boolean) => void;
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-2xl border bg-white p-3">
-      <div className="mb-2 font-medium">最大尺寸（px）</div>
+      <div className="mb-2 font-medium">{t("resize.maximumSizeTitle")}</div>
       <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs text-slate-500">最大宽度
+        <label className="text-xs text-slate-500">{t("resize.maximumWidth")}
           <input className="mt-1 w-full min-w-0 rounded-lg border px-2 py-1.5 text-sm text-slate-900" inputMode="numeric" onChange={(event) => onWidthChange(event.target.value)} value={width} />
         </label>
-        <label className="text-xs text-slate-500">最大高度
+        <label className="text-xs text-slate-500">{t("resize.maximumHeight")}
           <input className="mt-1 w-full min-w-0 rounded-lg border px-2 py-1.5 text-sm text-slate-900" inputMode="numeric" onChange={(event) => onHeightChange(event.target.value)} value={height} />
         </label>
       </div>
       <label className="mt-2 flex items-center justify-between text-sm text-slate-600">
-        锁定宽高比
+        {t("resize.lockRatio")}
         <input checked={lockRatio} className="h-4 w-4" onChange={(event) => onLockRatioChange(event.target.checked)} type="checkbox" />
       </label>
     </div>

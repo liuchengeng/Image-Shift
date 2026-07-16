@@ -1,5 +1,6 @@
 import type { DragEvent } from "react";
 import type { CropRect, ImportedImageFile, LayoutAdjustment, OutputFormat } from "@/src/shared/types/image";
+import { translate, type AppLanguage, type TranslationKey } from "./i18n";
 
 export type ToolMode = "Convert" | "Compress" | "Remove BG" | "Match Layout" | "Crop" | "Resize" | "Export";
 export type CropPreset = "free" | "1:1" | "4:5" | "16:9";
@@ -30,37 +31,42 @@ export type CropBox = {
 
 export type HistoryItem = {
   id: string;
-  title: string;
+  fileName: string;
   detail: string;
+  summary:
+    | { kind: "format"; format: string }
+    | { kind: "resize"; width?: string; height?: string }
+    | { kind: "crop" }
+    | { kind: "layout" };
   mode: ToolMode;
   success: boolean;
-  timestamp: string;
+  timestamp: number;
 };
 
 export const TOOL_MODES: ToolMode[] = ["Convert", "Compress", "Remove BG", "Match Layout", "Crop", "Resize", "Export"];
 
-export const TOOL_MODE_LABELS: Record<ToolMode, string> = {
-  Convert: "格式转换",
-  Compress: "图片压缩",
-  "Remove BG": "智能抠图",
-  "Match Layout": "版式匹配",
-  Crop: "图片裁剪",
-  Resize: "调整尺寸",
-  Export: "导出记录"
-};
+const TOOL_MODE_LABEL_KEYS = {
+  Convert: "mode.convert.label",
+  Compress: "mode.compress.label",
+  "Remove BG": "mode.removeBackground.label",
+  "Match Layout": "mode.matchLayout.label",
+  Crop: "mode.crop.label",
+  Resize: "mode.resize.label",
+  Export: "mode.export.label"
+} as const satisfies Record<ToolMode, TranslationKey>;
 
-const TOOL_MODE_DESCRIPTIONS: Record<ToolMode, string> = {
-  Convert: "转换图片格式。",
-  Compress: "压缩体积并对比效果。",
-  "Remove BG": "使用本地 AI 移除背景。",
-  "Match Layout": "按参考图匹配主体位置与大小。",
-  Crop: "裁剪并保留选中区域。",
-  Resize: "按最大宽高等比缩放。",
-  Export: "查看本次会话的导出记录。"
-};
+const TOOL_MODE_DESCRIPTION_KEYS = {
+  Convert: "mode.convert.description",
+  Compress: "mode.compress.description",
+  "Remove BG": "mode.removeBackground.description",
+  "Match Layout": "mode.matchLayout.description",
+  Crop: "mode.crop.description",
+  Resize: "mode.resize.description",
+  Export: "mode.export.description"
+} as const satisfies Record<ToolMode, TranslationKey>;
 
-export function getModeLabel(mode: ToolMode) {
-  return TOOL_MODE_LABELS[mode];
+export function getModeLabel(mode: ToolMode, language: AppLanguage = "zh-CN") {
+  return translate(language, TOOL_MODE_LABEL_KEYS[mode]);
 }
 
 export const DEFAULT_LAYOUT_ADJUSTMENT: LayoutAdjustment = {
@@ -277,6 +283,6 @@ export function resizeCropBox(
   );
 }
 
-export function getModeDescription(mode: ToolMode) {
-  return TOOL_MODE_DESCRIPTIONS[mode];
+export function getModeDescription(mode: ToolMode, language: AppLanguage = "zh-CN") {
+  return translate(language, TOOL_MODE_DESCRIPTION_KEYS[mode]);
 }
