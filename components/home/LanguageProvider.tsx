@@ -89,16 +89,16 @@ export function LanguageToggle() {
   return (
     <div
       aria-label={t("language.switchAria")}
-      className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5"
+      className="flex h-[34px] shrink-0 items-center rounded-[7px] border border-neutral-200 bg-neutral-100 p-0.5"
       role="group"
     >
       <button
         aria-label={t("language.chinese")}
         aria-pressed={language === CHINESE_LANGUAGE}
-        className={`min-w-8 rounded-md px-2 py-1.5 text-xs font-medium transition ${
+        className={`h-7 min-w-8 rounded-[5px] px-2 text-xs font-medium transition ${
           language === CHINESE_LANGUAGE
-            ? "bg-slate-900 text-white shadow-sm"
-            : "text-slate-500 hover:bg-white hover:text-slate-900"
+            ? "border border-neutral-200 bg-white text-neutral-900 shadow-sm"
+            : "border border-transparent text-neutral-500 hover:text-neutral-900"
         }`}
         lang="zh-CN"
         onClick={() => setLanguage(CHINESE_LANGUAGE)}
@@ -110,10 +110,10 @@ export function LanguageToggle() {
       <button
         aria-label={t("language.english")}
         aria-pressed={language === ENGLISH_LANGUAGE}
-        className={`min-w-8 rounded-md px-2 py-1.5 text-xs font-medium transition ${
+        className={`h-7 min-w-8 rounded-[5px] px-2 text-xs font-medium transition ${
           language === ENGLISH_LANGUAGE
-            ? "bg-slate-900 text-white shadow-sm"
-            : "text-slate-500 hover:bg-white hover:text-slate-900"
+            ? "border border-neutral-200 bg-white text-neutral-900 shadow-sm"
+            : "border border-transparent text-neutral-500 hover:text-neutral-900"
         }`}
         lang="en"
         onClick={() => setLanguage(ENGLISH_LANGUAGE)}

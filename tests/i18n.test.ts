@@ -37,7 +37,7 @@ describe("i18n translations", () => {
   it("translates static and parameterized copy without losing zero values", () => {
     expect(translate("zh-CN", "mode.matchLayout.label")).toBe("版式匹配");
     expect(translate("en-US", "mode.matchLayout.label")).toBe("Match Layout");
-    expect(translate("zh-CN", "layout.offset", { x: 0, y: -12 })).toBe("偏移 0, -12 px");
+    expect(translate("zh-CN", "layout.offset", { x: 0, y: -12 })).toBe("X 0 · Y -12 px");
     expect(translate("en-US", "history.successTitle", { name: "demo.png", summary: "PNG" })).toBe(
       "demo.png → PNG"
     );

@@ -43,6 +43,7 @@ import {
   formatBytes,
   getAspectRatioValue,
   getDesktopApi,
+  getDroppedFiles,
   getModeLabel,
   getOutputFormatFromPath,
   moveCropBox,
@@ -64,6 +65,105 @@ type WorkbenchMode = Exclude<ToolMode, "Export">;
 
 function getUserErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function BrandMark() {
+  return (
+    <div aria-hidden="true" className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg bg-neutral-950 text-white shadow-sm">
+      <span className="absolute h-3.5 w-3.5 -translate-x-0.5 -translate-y-0.5 rounded-[3px] border border-white/45" />
+      <span className="absolute h-3.5 w-3.5 translate-x-0.5 translate-y-0.5 rounded-[3px] border border-white" />
+    </div>
+  );
+}
+
+function ToolIcon({ mode }: { mode: ToolMode }) {
+  const commonProps = {
+    "aria-hidden": true,
+    fill: "none",
+    height: 15,
+    viewBox: "0 0 24 24",
+    width: 15
+  } as const;
+
+  if (mode === "Convert") {
+    return <svg {...commonProps}><path d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3 3m-3-3 3-3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>;
+  }
+
+  if (mode === "Compress") {
+    return <svg {...commonProps}><path d="M9 4v5H4m11-5v5h5M9 20v-5H4m11 5v-5h5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>;
+  }
+
+  if (mode === "Remove BG") {
+    return <svg {...commonProps}><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Z" stroke="currentColor" strokeWidth="1.6" /><path d="m7 16 3.3-3.3a1 1 0 0 1 1.4 0L14 15l1.2-1.2a1 1 0 0 1 1.4 0L18 15.2M8 8h.01" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>;
+  }
+
+  if (mode === "Match Layout") {
+    return <svg {...commonProps}><rect height="13" rx="1.5" stroke="currentColor" strokeWidth="1.6" width="13" x="3.5" y="3.5" /><path d="M9.5 7.5h10a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2h-10a1 1 0 0 1-1-1v-10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>;
+  }
+
+  if (mode === "Crop") {
+    return <svg {...commonProps}><path d="M7 3v14h14M3 7h14v14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>;
+  }
+
+  if (mode === "Resize") {
+    return <svg {...commonProps}><path d="M8 4H4v4m12-4h4v4M8 20H4v-4m12 4h4v-4M4 8l5-5m11 5-5-5M4 16l5 5m11-5-5 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>;
+  }
+
+  return <svg {...commonProps}><path d="M6 3.5h12A1.5 1.5 0 0 1 19.5 5v15.5l-3-2-3 2-3-2-3 2-3-2V5A1.5 1.5 0 0 1 6 3.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /><path d="M8 8h8m-8 4h8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" /></svg>;
+}
+
+type EmptyWorkspaceProps = {
+  activeMode: WorkbenchMode;
+  onAddImages: () => void;
+  onDropFiles: (files: ImportedImageFile[]) => void;
+  settings: React.ReactNode;
+  exportControls: React.ReactNode;
+};
+
+function EmptyWorkspace({ activeMode, onAddImages, onDropFiles, settings, exportControls }: EmptyWorkspaceProps) {
+  const { language, t } = useLanguage();
+
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_288px] gap-3 p-3">
+      <section
+        className="ui-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          onDropFiles(getDroppedFiles(event));
+        }}
+      >
+        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-3">
+          <h1 className="ui-panel-title">{t("queue.title")}</h1>
+          <span className="text-xs text-neutral-500">JPG · PNG · WEBP</span>
+        </div>
+        <div className="empty-workspace-stage flex min-h-0 flex-1 items-center justify-center p-6 text-center">
+          <div className="rounded-xl border border-neutral-200 bg-white/95 px-8 py-7 shadow-sm backdrop-blur-sm">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">
+              <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+              </svg>
+            </div>
+            <div className="text-sm font-semibold text-neutral-900">{t("queue.dropHint")}</div>
+            <button className="ui-button-primary mt-4 px-4" onClick={onAddImages} type="button">
+              {t("common.addImages")}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside className="settings-rail ui-panel h-full min-h-0 overflow-y-auto">
+        <div className="flex min-h-full flex-col">
+          <div className="flex h-11 shrink-0 items-center gap-2 border-b border-neutral-200 px-3">
+            <ToolIcon mode={activeMode} />
+            <div className="ui-panel-title">{getModeLabel(activeMode, language)}</div>
+          </div>
+          {settings}
+          {exportControls}
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 export function ImageShiftDashboard() {
@@ -163,7 +263,7 @@ function ImageShiftDashboardContent() {
   }, [files, selectedFileId]);
 
   useEffect(() => {
-    const needsPreview = activeMode === "Compress" || activeMode === "Remove BG" || activeMode === "Match Layout" || activeMode === "Crop" || activeMode === "Resize";
+    const needsPreview = activeMode === "Convert" || activeMode === "Compress" || activeMode === "Remove BG" || activeMode === "Match Layout" || activeMode === "Crop" || activeMode === "Resize";
 
     if (!needsPreview || !selectedInputPath) {
       setPreview(null);
@@ -933,34 +1033,129 @@ function ImageShiftDashboardContent() {
     });
   }
 
+  const activeSettings = (
+    <>
+      {activeMode === "Convert" ? (
+        <>
+          <FormatCard outputFormat={outputFormat} onChange={setOutputFormat} />
+          {outputFormat !== "png" ? <QualityCard onChange={setQuality} quality={quality} /> : null}
+        </>
+      ) : null}
+      {activeMode === "Compress" ? (
+        <>
+          <QualityCard onChange={setQuality} quality={quality} />
+          <FormatCard options={COMPRESS_FORMAT_OPTIONS} outputFormat={outputFormat === "png" ? "jpeg" : outputFormat} onChange={setOutputFormat} title={t("format.compressionTitle")} />
+        </>
+      ) : null}
+      {activeMode === "Remove BG" ? (
+        <FormatCard
+          options={TRANSPARENT_FORMAT_OPTIONS}
+          outputFormat={outputFormat === "jpeg" ? "png" : outputFormat}
+          onChange={setOutputFormat}
+          title={t("format.transparentTitle")}
+        />
+      ) : null}
+      {activeMode === "Match Layout" ? (
+        <>
+          <LayoutReferenceCard
+            analysis={referenceAnalysis}
+            analyzing={referenceAnalyzing}
+            error={referenceError}
+            onChoose={chooseReferenceFile}
+            referenceFile={referenceFile}
+          />
+          <LayoutAdjustmentCard
+            adjustment={selectedLayoutAdjustment}
+            disabled={!selectedFile || !referenceAnalysis || layoutPreviewWorkerBusy}
+            onChange={updateSelectedLayoutAdjustment}
+            onReset={() => updateSelectedLayoutAdjustment(createDefaultLayoutAdjustment())}
+          />
+        </>
+      ) : null}
+      {activeMode === "Crop" ? (
+        <>
+          <AspectRatioCard cropPreset={cropPreset} onChange={setCropPreset} />
+          <CropFieldsCard
+            crop={selectedFile?.crop}
+            onChange={(field, value) =>
+              updateSelectedCrop({
+                ...(selectedFile?.crop ?? { left: 0, top: 0, width: preview?.width ?? 0, height: preview?.height ?? 0 }),
+                [field]: Number(value.replace(/[^\d]/g, "")) || 0
+              })
+            }
+          />
+        </>
+      ) : null}
+      {activeMode === "Resize" ? (
+        <>
+          <ResizePresetCard
+            onApply={(nextWidth, nextHeight) => {
+              setWidth(String(nextWidth));
+              setHeight(String(nextHeight));
+            }}
+            presets={RESIZE_PRESETS}
+          />
+          <ResizeFieldsCard height={height} lockRatio={lockRatio} onHeightChange={updateHeight} onLockRatioChange={setLockRatio} onWidthChange={updateWidth} width={width} />
+        </>
+      ) : null}
+    </>
+  );
+
+  const exportControls = (
+    <RunCard
+      busy={busy || layoutOperationBusy}
+      files={activeMode === "Match Layout" ? layoutReadyFileCount : files.length}
+      onChooseFolder={chooseOutputDir}
+      onRun={exportBatch}
+      outputDir={outputDir}
+      secondaryAction={activeMode === "Crop" ? { label: t("crop.clear"), onClick: () => { setDraftCrop(null); updateSelectedCrop(undefined); } } : undefined}
+    />
+  );
+
   return (
-    <div className="h-screen overflow-hidden bg-[#f6f7fb] text-slate-900">
-      <header className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4">
-        <div className="shrink-0 text-base font-semibold tracking-tight">Image-Shift</div>
-        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label={t("nav.toolsAria")}>
+    <div className="h-screen overflow-hidden bg-[var(--ui-canvas)] text-neutral-900">
+      <header className="flex h-[52px] items-center gap-2 border-b border-neutral-200 bg-white px-3">
+        <div className="flex shrink-0 items-center gap-2 pr-1">
+          <BrandMark />
+          <div className="text-[15px] font-semibold tracking-[-0.02em]">Image-Shift</div>
+        </div>
+        <div aria-hidden="true" className="mx-1 h-5 w-px bg-neutral-200" />
+        <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" aria-label={t("nav.toolsAria")}>
           {TOOL_MODES.map((mode) => (
             <button
               aria-current={activeMode === mode ? "page" : undefined}
-              className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm transition ${activeMode === mode ? "bg-slate-900 font-medium text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-[13px] transition ${activeMode === mode ? "border-neutral-200 bg-neutral-100 font-medium text-neutral-950 shadow-sm" : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"}`}
+              data-testid={`tool-${mode.toLowerCase().replaceAll(" ", "-")}`}
               key={mode}
               onClick={() => setActiveMode(mode)}
               type="button"
             >
+              <ToolIcon mode={mode} />
               {getModeLabel(mode, language)}
             </button>
           ))}
         </nav>
         <LanguageToggle />
-        <button className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800" onClick={importImages} type="button">
+        <button className="ui-button-primary flex shrink-0 items-center gap-1.5 px-3" onClick={importImages} type="button">
+          <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /></svg>
           {t("common.addImages")}
         </button>
       </header>
 
-      <main className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden">
-        {actionError ? <div className="mx-4 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{localizeErrorMessage(actionError, language)}</div> : null}
+      <main className="flex h-[calc(100vh-52px)] min-h-0 flex-col overflow-hidden">
+        {actionError ? <div className="mx-3 mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{localizeErrorMessage(actionError, language)}</div> : null}
 
         {activeMode !== "Export" ? (
-          <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_280px] items-start gap-4 p-4">
+          files.length === 0 ? (
+            <EmptyWorkspace
+              activeMode={activeMode}
+              exportControls={exportControls}
+              onAddImages={importImages}
+              onDropFiles={appendImportedFiles}
+              settings={activeSettings}
+            />
+          ) : (
+          <div className="grid min-h-0 flex-1 grid-cols-[216px_minmax(0,1fr)_288px] items-stretch gap-3 p-3">
             <div className="min-h-0 self-stretch overflow-hidden">
               <FileListPanel
                 files={files}
@@ -973,7 +1168,7 @@ function ImageShiftDashboardContent() {
               />
             </div>
 
-            <section className="min-w-0 self-start">
+            <section className="h-full min-h-0 min-w-0 self-stretch">
               {activeMode === "Convert" ? (
                 <ConvertSummaryPanel
                   estimatedOutputSizeBytes={estimatedOutputSizeBytes}
@@ -981,6 +1176,9 @@ function ImageShiftDashboardContent() {
                   estimateError={estimateError}
                   estimating={estimating}
                   files={files}
+                  onAddImages={importImages}
+                  preview={preview}
+                  previewError={previewError}
                   selectedFile={selectedFile}
                   targetFormat={outputFormat.toUpperCase()}
                 />
@@ -1046,84 +1244,16 @@ function ImageShiftDashboardContent() {
               ) : null}
             </section>
 
-            <aside className="min-h-0 self-stretch overflow-y-auto pr-1">
-              <div className="space-y-3">
-                {activeMode === "Convert" ? (
-                  <>
-                    <FormatCard outputFormat={outputFormat} onChange={setOutputFormat} />
-                    {outputFormat !== "png" ? <QualityCard onChange={setQuality} quality={quality} /> : null}
-                  </>
-                ) : null}
-                {activeMode === "Compress" ? (
-                  <>
-                    <QualityCard onChange={setQuality} quality={quality} />
-                    <FormatCard options={COMPRESS_FORMAT_OPTIONS} outputFormat={outputFormat === "png" ? "jpeg" : outputFormat} onChange={setOutputFormat} title={t("format.compressionTitle")} />
-                  </>
-                ) : null}
-                {activeMode === "Remove BG" ? (
-                  <FormatCard
-                    options={TRANSPARENT_FORMAT_OPTIONS}
-                    outputFormat={outputFormat === "jpeg" ? "png" : outputFormat}
-                    onChange={setOutputFormat}
-                    title={t("format.transparentTitle")}
-                  />
-                ) : null}
-                {activeMode === "Match Layout" ? (
-                  <>
-                    <LayoutReferenceCard
-                      analysis={referenceAnalysis}
-                      analyzing={referenceAnalyzing}
-                      error={referenceError}
-                      onChoose={chooseReferenceFile}
-                      referenceFile={referenceFile}
-                    />
-                    <LayoutAdjustmentCard
-                      adjustment={selectedLayoutAdjustment}
-                      disabled={!selectedFile || !referenceAnalysis || layoutPreviewWorkerBusy}
-                      onChange={updateSelectedLayoutAdjustment}
-                      onReset={() => updateSelectedLayoutAdjustment(createDefaultLayoutAdjustment())}
-                    />
-                  </>
-                ) : null}
-                {activeMode === "Crop" ? (
-                  <>
-                    <AspectRatioCard cropPreset={cropPreset} onChange={setCropPreset} />
-                    <CropFieldsCard
-                      crop={selectedFile?.crop}
-                      onChange={(field, value) =>
-                        updateSelectedCrop({
-                          ...(selectedFile?.crop ?? { left: 0, top: 0, width: preview?.width ?? 0, height: preview?.height ?? 0 }),
-                          [field]: Number(value.replace(/[^\d]/g, "")) || 0
-                        })
-                      }
-                    />
-                  </>
-                ) : null}
-                {activeMode === "Resize" ? (
-                  <>
-                    <ResizePresetCard
-                      onApply={(nextWidth, nextHeight) => {
-                        setWidth(String(nextWidth));
-                        setHeight(String(nextHeight));
-                      }}
-                      presets={RESIZE_PRESETS}
-                    />
-                    <ResizeFieldsCard height={height} lockRatio={lockRatio} onHeightChange={updateHeight} onLockRatioChange={setLockRatio} onWidthChange={updateWidth} width={width} />
-                  </>
-                ) : null}
-                <RunCard
-                  busy={busy || layoutOperationBusy}
-                  files={activeMode === "Match Layout" ? layoutReadyFileCount : files.length}
-                  onChooseFolder={chooseOutputDir}
-                  onRun={exportBatch}
-                  outputDir={outputDir}
-                  secondaryAction={activeMode === "Crop" ? { label: t("crop.clear"), onClick: () => { setDraftCrop(null); updateSelectedCrop(undefined); } } : undefined}
-                />
+            <aside className="settings-rail ui-panel h-full min-h-0 self-stretch overflow-y-auto">
+              <div className="flex min-h-full flex-col">
+                {activeSettings}
+                {exportControls}
               </div>
             </aside>
           </div>
+          )
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
             <ExportHistoryPanel busy={busy || layoutOperationBusy} history={history} onChooseFolder={chooseOutputDir} onRun={exportBatch} outputDir={outputDir} ready={runnableFileCount > 0 && Boolean(outputDir) && !layoutOperationBusy} result={result} />
           </div>
         )}
