@@ -14,6 +14,8 @@ import type {
 } from "@/src/shared/types/image";
 import { ExportHistoryPanel } from "@/components/home/ExportHistoryPanel";
 import { FileListPanel } from "@/components/home/FileListPanel";
+import { LanguageProvider, LanguageToggle, useLanguage } from "@/components/home/LanguageProvider";
+import { localizeErrorMessage } from "@/components/home/i18n";
 import {
   BackgroundRemovalPanel,
   CompressPreviewPanel,
@@ -41,6 +43,7 @@ import {
   formatBytes,
   getAspectRatioValue,
   getDesktopApi,
+  getDroppedFiles,
   getModeLabel,
   getOutputFormatFromPath,
   moveCropBox,
@@ -60,61 +63,119 @@ import {
 
 type WorkbenchMode = Exclude<ToolMode, "Export">;
 
-const USER_ERROR_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
-  ["Background removal task is invalid.", "抠图任务无效。"],
-  ["AI background removal failed.", "智能抠图失败。"],
-  ["Unable to read image dimensions for cropping.", "无法读取图片尺寸，不能裁剪。"],
-  ["Crop region is outside the image bounds.", "裁剪区域超出了图片范围。"],
-  ["Crop values must be integers.", "裁剪参数必须是整数。"],
-  ["Crop bounds must be non-negative and dimensions must be > 0.", "裁剪位置不能为负数，宽高必须大于 0。"],
-  ["Failed to read image size.", "无法读取图片尺寸。"],
-  ["Failed to read preview image size.", "无法读取预览图片尺寸。"],
-  ["Image worker task is invalid.", "图片处理任务无效。"],
-  ["A reference image path is required.", "缺少参考图路径。"],
-  ["Unknown image worker task.", "未知的图片处理任务。"],
-  ["Image worker failed.", "图片处理失败。"],
-  ["The transparent image does not have a distinct subject boundary.", "透明图片没有清晰的主体边界。"],
-  ["No subject could be distinguished from the background.", "无法从背景中识别主体。"],
-  ["The subject does not have a stable edge against the sampled background.", "主体与背景之间没有稳定边界。"],
-  ["The detected subject fills the canvas and cannot be aligned reliably.", "主体铺满画布，无法可靠对齐。"],
-  ["The subject boundary confidence is too low.", "主体边界识别置信度过低。"],
-  ["Failed to read image size for layout matching.", "无法读取用于版式匹配的图片尺寸。"],
-  ["No recognizable subject was found.", "未找到可识别的主体。"],
-  ["The local AI model could not identify a reliable subject boundary.", "本地 AI 无法识别可靠的主体边界。"],
-  ["Layout reference analysis is missing.", "缺少参考图分析结果。"],
-  ["Layout reference analysis is invalid.", "参考图分析结果无效。"],
-  ["Layout reference subject bounds are outside the canvas.", "参考图主体范围超出了画布。"],
-  ["Layout adjustment is invalid.", "版式微调参数无效。"],
-  ["Failed to read target image size for layout matching.", "无法读取目标图尺寸。"],
-  ["The calculated layout scale is outside the supported range.", "计算出的缩放比例超出支持范围。"],
-  ["The adjusted subject is outside the output canvas.", "调整后的主体超出了输出画布。"],
-  ["This file format is not supported for preview.", "该文件格式不支持预览。"],
-  ["This file format is not supported for layout matching.", "该文件格式不支持版式匹配。"],
-  ["No jobs to process.", "没有可处理的任务。"],
-  ["Output folder is required.", "请选择输出文件夹。"],
-  ["Processing failed.", "处理失败。"],
-  ["Job id is required.", "缺少任务编号。"],
-  ["Input path is required.", "缺少输入文件路径。"],
-  ["Output format must be jpeg, png, or webp.", "输出格式必须是 JPG、PNG 或 WEBP。"],
-  ["Quality must be an integer from 1 to 100.", "质量必须是 1 到 100 之间的整数。"],
-  ["Background removal output must be PNG or WEBP.", "智能抠图只能输出 PNG 或 WEBP。"],
-  ["Resize width/height must be positive integers when provided.", "输出宽高必须是正整数。"],
-  ["Output directory is required.", "请选择输出文件夹。"],
-  ["At least one job is required.", "请至少添加一个处理任务。"]
-];
+function getUserErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
-function localizeErrorMessage(message: string) {
-  return USER_ERROR_REPLACEMENTS.reduce(
-    (localized, [source, target]) => localized.split(source).join(target),
-    message
+function BrandMark() {
+  return (
+    <div aria-hidden="true" className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg bg-neutral-950 text-white shadow-sm">
+      <span className="absolute h-3.5 w-3.5 -translate-x-0.5 -translate-y-0.5 rounded-[3px] border border-white/45" />
+      <span className="absolute h-3.5 w-3.5 translate-x-0.5 translate-y-0.5 rounded-[3px] border border-white" />
+    </div>
   );
 }
 
-function getUserErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? localizeErrorMessage(error.message) : fallback;
+function ToolIcon({ mode }: { mode: ToolMode }) {
+  const commonProps = {
+    "aria-hidden": true,
+    fill: "none",
+    height: 15,
+    viewBox: "0 0 24 24",
+    width: 15
+  } as const;
+
+  if (mode === "Convert") {
+    return <svg {...commonProps}><path d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3 3m-3-3 3-3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>;
+  }
+
+  if (mode === "Compress") {
+    return <svg {...commonProps}><path d="M9 4v5H4m11-5v5h5M9 20v-5H4m11 5v-5h5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>;
+  }
+
+  if (mode === "Remove BG") {
+    return <svg {...commonProps}><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Z" stroke="currentColor" strokeWidth="1.6" /><path d="m7 16 3.3-3.3a1 1 0 0 1 1.4 0L14 15l1.2-1.2a1 1 0 0 1 1.4 0L18 15.2M8 8h.01" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>;
+  }
+
+  if (mode === "Match Layout") {
+    return <svg {...commonProps}><rect height="13" rx="1.5" stroke="currentColor" strokeWidth="1.6" width="13" x="3.5" y="3.5" /><path d="M9.5 7.5h10a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2h-10a1 1 0 0 1-1-1v-10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>;
+  }
+
+  if (mode === "Crop") {
+    return <svg {...commonProps}><path d="M7 3v14h14M3 7h14v14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>;
+  }
+
+  if (mode === "Resize") {
+    return <svg {...commonProps}><path d="M8 4H4v4m12-4h4v4M8 20H4v-4m12 4h4v-4M4 8l5-5m11 5-5-5M4 16l5 5m11-5-5 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>;
+  }
+
+  return <svg {...commonProps}><path d="M6 3.5h12A1.5 1.5 0 0 1 19.5 5v15.5l-3-2-3 2-3-2-3 2-3-2V5A1.5 1.5 0 0 1 6 3.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /><path d="M8 8h8m-8 4h8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" /></svg>;
+}
+
+type EmptyWorkspaceProps = {
+  activeMode: WorkbenchMode;
+  onAddImages: () => void;
+  onDropFiles: (files: ImportedImageFile[]) => void;
+  settings: React.ReactNode;
+  exportControls: React.ReactNode;
+};
+
+function EmptyWorkspace({ activeMode, onAddImages, onDropFiles, settings, exportControls }: EmptyWorkspaceProps) {
+  const { language, t } = useLanguage();
+
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_288px] gap-3 p-3">
+      <section
+        className="ui-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          onDropFiles(getDroppedFiles(event));
+        }}
+      >
+        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-3">
+          <h1 className="ui-panel-title">{t("queue.title")}</h1>
+          <span className="text-xs text-neutral-500">JPG · PNG · WEBP</span>
+        </div>
+        <div className="empty-workspace-stage flex min-h-0 flex-1 items-center justify-center p-6 text-center">
+          <div className="rounded-xl border border-neutral-200 bg-white/95 px-8 py-7 shadow-sm backdrop-blur-sm">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">
+              <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+              </svg>
+            </div>
+            <div className="text-sm font-semibold text-neutral-900">{t("queue.dropHint")}</div>
+            <button className="ui-button-primary mt-4 px-4" onClick={onAddImages} type="button">
+              {t("common.addImages")}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside className="settings-rail ui-panel h-full min-h-0 overflow-y-auto">
+        <div className="flex min-h-full flex-col">
+          <div className="flex h-11 shrink-0 items-center gap-2 border-b border-neutral-200 px-3">
+            <ToolIcon mode={activeMode} />
+            <div className="ui-panel-title">{getModeLabel(activeMode, language)}</div>
+          </div>
+          {settings}
+          {exportControls}
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 export function ImageShiftDashboard() {
+  return (
+    <LanguageProvider>
+      <ImageShiftDashboardContent />
+    </LanguageProvider>
+  );
+}
+
+function ImageShiftDashboardContent() {
+  const { language, t } = useLanguage();
   const imageRef = useRef<HTMLImageElement | null>(null);
   const referenceAnalysisCache = useRef(new Map<string, LayoutReferenceAnalysis>());
   const layoutPreviewWorkerBusyRef = useRef(false);
@@ -202,7 +263,7 @@ export function ImageShiftDashboard() {
   }, [files, selectedFileId]);
 
   useEffect(() => {
-    const needsPreview = activeMode === "Compress" || activeMode === "Remove BG" || activeMode === "Match Layout" || activeMode === "Crop" || activeMode === "Resize";
+    const needsPreview = activeMode === "Convert" || activeMode === "Compress" || activeMode === "Remove BG" || activeMode === "Match Layout" || activeMode === "Crop" || activeMode === "Resize";
 
     if (!needsPreview || !selectedInputPath) {
       setPreview(null);
@@ -213,7 +274,7 @@ export function ImageShiftDashboard() {
 
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
-      setPreviewError("桌面处理服务不可用，请运行安装后的应用。");
+      setPreviewError("Desktop processing is unavailable. Run the installed app.");
       return;
     }
 
@@ -230,7 +291,7 @@ export function ImageShiftDashboard() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setPreviewError(getUserErrorMessage(error, "预览加载失败。"));
+          setPreviewError(getUserErrorMessage(error, "Failed to load the preview."));
         }
       });
 
@@ -250,7 +311,7 @@ export function ImageShiftDashboard() {
     const isLayoutMatch = activeMode === "Match Layout";
     if (isLayoutMatch && !referenceAnalysis) {
       setAfterPreview(null);
-      setAfterPreviewError(referenceError || "请先选择参考图。");
+      setAfterPreviewError(referenceError || "Choose a reference image first.");
       setEstimating(false);
       return;
     }
@@ -264,7 +325,7 @@ export function ImageShiftDashboard() {
 
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
-      setAfterPreviewError("桌面处理服务不可用，请运行安装后的应用。");
+      setAfterPreviewError("Desktop processing is unavailable. Run the installed app.");
       return;
     }
 
@@ -317,10 +378,10 @@ export function ImageShiftDashboard() {
             const message = getUserErrorMessage(
               error,
               isLayoutMatch
-                ? "无法可靠识别并匹配主体。"
+                ? "Unable to reliably detect and match the subject."
                 : isBackgroundRemoval
-                  ? "智能抠图失败。"
-                  : "压缩预览加载失败。"
+                  ? "AI background removal failed."
+                  : "Failed to load the compressed preview."
             );
             setAfterPreviewError(message);
             setEstimatedOutputSizeBytes(undefined);
@@ -368,7 +429,7 @@ export function ImageShiftDashboard() {
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
       setEstimatedOutputSizeBytes(undefined);
-      setEstimateError("当前环境不可用");
+      setEstimateError("The current environment is unavailable.");
       setEstimating(false);
       return;
     }
@@ -394,7 +455,7 @@ export function ImageShiftDashboard() {
         .catch((error) => {
           if (!cancelled) {
             setEstimatedOutputSizeBytes(undefined);
-            setEstimateError(getUserErrorMessage(error, "大小估算失败。"));
+            setEstimateError(getUserErrorMessage(error, "Failed to estimate output size."));
           }
         })
         .finally(() => {
@@ -580,21 +641,21 @@ export function ImageShiftDashboard() {
   async function importImages() {
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
-      setActionError("文件选择器不可用，请运行安装后的应用。");
+      setActionError("The file picker is unavailable. Run the installed app.");
       return;
     }
 
     try {
       appendImportedFiles(await desktopApi.pickInputFiles());
     } catch (error) {
-      setActionError(getUserErrorMessage(error, "图片导入失败。"));
+      setActionError(getUserErrorMessage(error, "Failed to import images."));
     }
   }
 
   async function chooseReferenceFile() {
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
-      setReferenceError("参考图选择器不可用，请运行安装后的应用。");
+      setReferenceError("The reference image picker is unavailable. Run the installed app.");
       return;
     }
 
@@ -625,7 +686,7 @@ export function ImageShiftDashboard() {
     } catch (error) {
       setReferenceAnalysis(null);
       setReferencePreview(null);
-      setReferenceError(getUserErrorMessage(error, "参考图分析失败。"));
+      setReferenceError(getUserErrorMessage(error, "Failed to analyze the reference image."));
     } finally {
       setReferenceAnalyzing(false);
     }
@@ -648,7 +709,7 @@ export function ImageShiftDashboard() {
   async function chooseOutputDir() {
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
-      setActionError("文件夹选择器不可用，请运行安装后的应用。");
+      setActionError("The folder picker is unavailable. Run the installed app.");
       return;
     }
 
@@ -658,7 +719,7 @@ export function ImageShiftDashboard() {
         setOutputDir(nextDir);
       }
     } catch (error) {
-      setActionError(getUserErrorMessage(error, "输出文件夹选择失败。"));
+      setActionError(getUserErrorMessage(error, "Failed to choose the output folder."));
     }
   }
 
@@ -740,33 +801,33 @@ export function ImageShiftDashboard() {
 
     const desktopApi = getDesktopApi();
     if (!desktopApi) {
-      setActionError("图片处理服务不可用，请运行安装后的应用。");
+      setActionError("Image processing is unavailable. Run the installed app.");
       return;
     }
 
     if (effectiveMode === "Crop" && !files.some((file) => file.crop)) {
-      setActionError("请先绘制裁剪区域再导出。");
+      setActionError("Draw a crop area before exporting.");
       return;
     }
 
     if (effectiveMode === "Resize" && (!width && !height)) {
-      setActionError("请至少填写宽度或高度。");
+      setActionError("Enter at least a width or height.");
       return;
     }
 
     if (effectiveMode === "Match Layout") {
       if (!referenceAnalysis) {
-        setActionError("请先选择有效的参考图。");
+        setActionError("Choose a valid reference image first.");
         return;
       }
 
       if (referenceAnalyzing || layoutPreviewWorkerBusy) {
-        setActionError("请等待版式分析或预览完成后再导出。");
+        setActionError("Wait for layout analysis or preview to finish before exporting.");
         return;
       }
 
       if (validLayoutFiles.length === 0) {
-        setActionError("没有可导出的目标图，请重置或替换处理失败的图片。");
+        setActionError("There are no target images to export. Reset or replace failed images.");
         return;
       }
     }
@@ -782,12 +843,7 @@ export function ImageShiftDashboard() {
 
     try {
       const rawResult = await desktopApi.processBatch(payload);
-      const nextResult: BatchProcessResult = {
-        ...rawResult,
-        results: rawResult.results.map((item) => item.error
-          ? { ...item, error: { ...item.error, message: localizeErrorMessage(item.error.message) } }
-          : item)
-      };
+      const nextResult = rawResult;
       setResult(nextResult);
       const filesById = new Map(files.map((file) => [file.id, file]));
 
@@ -801,7 +857,7 @@ export function ImageShiftDashboard() {
 
           return item.success
             ? { ...file, layoutError: undefined }
-            : { ...file, layoutError: item.error?.message ?? "版式匹配失败。" };
+            : { ...file, layoutError: item.error?.message ?? "Layout matching failed." };
         }));
       }
 
@@ -810,44 +866,45 @@ export function ImageShiftDashboard() {
           const file = filesById.get(item.id);
           return {
             id: `${item.id}-${Date.now()}`,
-            title: item.success ? `${file?.name ?? item.id} → ${getHistoryLabel()}` : `${file?.name ?? item.id} 导出失败`,
-            detail: item.success ? `${formatBytes(file?.sizeBytes)} → ${formatBytes(item.outputSizeBytes)}` : item.error?.message ?? "未知处理错误。",
+            fileName: file?.name ?? item.id,
+            detail: item.success ? `${formatBytes(file?.sizeBytes)} → ${formatBytes(item.outputSizeBytes)}` : item.error?.message ?? "Unknown processing error.",
+            summary: getHistorySummary(),
             mode: effectiveMode,
             success: item.success,
-            timestamp: new Date().toLocaleString()
+            timestamp: Date.now()
           };
         }),
         ...current
       ].slice(0, 24));
     } catch (error) {
-      setActionError(getUserErrorMessage(error, "批量处理失败。"));
+      setActionError(getUserErrorMessage(error, "Batch processing failed."));
     } finally {
       setBusy(false);
     }
   }
 
-  function getHistoryLabel() {
+  function getHistorySummary(): HistoryItem["summary"] {
     if (effectiveMode === "Resize") {
-      return `${width || "自动"} × ${height || "自动"}`;
+      return { kind: "resize", width: width || undefined, height: height || undefined };
     }
 
     if (effectiveMode === "Crop") {
-      return "已裁剪";
-    }
-
-    if (effectiveMode === "Compress") {
-      return (outputFormat === "png" ? "JPEG" : outputFormat.toUpperCase());
-    }
-
-    if (effectiveMode === "Remove BG") {
-      return (outputFormat === "jpeg" ? "PNG" : outputFormat.toUpperCase());
+      return { kind: "crop" };
     }
 
     if (effectiveMode === "Match Layout") {
-      return "已匹配";
+      return { kind: "layout" };
     }
 
-    return outputFormat.toUpperCase();
+    if (effectiveMode === "Compress") {
+      return { kind: "format", format: (outputFormat === "png" ? "jpeg" : outputFormat).toUpperCase() };
+    }
+
+    if (effectiveMode === "Remove BG") {
+      return { kind: "format", format: (outputFormat === "jpeg" ? "png" : outputFormat).toUpperCase() };
+    }
+
+    return { kind: "format", format: outputFormat.toUpperCase() };
   }
 
   function clearFiles() {
@@ -976,33 +1033,129 @@ export function ImageShiftDashboard() {
     });
   }
 
+  const activeSettings = (
+    <>
+      {activeMode === "Convert" ? (
+        <>
+          <FormatCard outputFormat={outputFormat} onChange={setOutputFormat} />
+          {outputFormat !== "png" ? <QualityCard onChange={setQuality} quality={quality} /> : null}
+        </>
+      ) : null}
+      {activeMode === "Compress" ? (
+        <>
+          <QualityCard onChange={setQuality} quality={quality} />
+          <FormatCard options={COMPRESS_FORMAT_OPTIONS} outputFormat={outputFormat === "png" ? "jpeg" : outputFormat} onChange={setOutputFormat} title={t("format.compressionTitle")} />
+        </>
+      ) : null}
+      {activeMode === "Remove BG" ? (
+        <FormatCard
+          options={TRANSPARENT_FORMAT_OPTIONS}
+          outputFormat={outputFormat === "jpeg" ? "png" : outputFormat}
+          onChange={setOutputFormat}
+          title={t("format.transparentTitle")}
+        />
+      ) : null}
+      {activeMode === "Match Layout" ? (
+        <>
+          <LayoutReferenceCard
+            analysis={referenceAnalysis}
+            analyzing={referenceAnalyzing}
+            error={referenceError}
+            onChoose={chooseReferenceFile}
+            referenceFile={referenceFile}
+          />
+          <LayoutAdjustmentCard
+            adjustment={selectedLayoutAdjustment}
+            disabled={!selectedFile || !referenceAnalysis || layoutPreviewWorkerBusy}
+            onChange={updateSelectedLayoutAdjustment}
+            onReset={() => updateSelectedLayoutAdjustment(createDefaultLayoutAdjustment())}
+          />
+        </>
+      ) : null}
+      {activeMode === "Crop" ? (
+        <>
+          <AspectRatioCard cropPreset={cropPreset} onChange={setCropPreset} />
+          <CropFieldsCard
+            crop={selectedFile?.crop}
+            onChange={(field, value) =>
+              updateSelectedCrop({
+                ...(selectedFile?.crop ?? { left: 0, top: 0, width: preview?.width ?? 0, height: preview?.height ?? 0 }),
+                [field]: Number(value.replace(/[^\d]/g, "")) || 0
+              })
+            }
+          />
+        </>
+      ) : null}
+      {activeMode === "Resize" ? (
+        <>
+          <ResizePresetCard
+            onApply={(nextWidth, nextHeight) => {
+              setWidth(String(nextWidth));
+              setHeight(String(nextHeight));
+            }}
+            presets={RESIZE_PRESETS}
+          />
+          <ResizeFieldsCard height={height} lockRatio={lockRatio} onHeightChange={updateHeight} onLockRatioChange={setLockRatio} onWidthChange={updateWidth} width={width} />
+        </>
+      ) : null}
+    </>
+  );
+
+  const exportControls = (
+    <RunCard
+      busy={busy || layoutOperationBusy}
+      files={activeMode === "Match Layout" ? layoutReadyFileCount : files.length}
+      onChooseFolder={chooseOutputDir}
+      onRun={exportBatch}
+      outputDir={outputDir}
+      secondaryAction={activeMode === "Crop" ? { label: t("crop.clear"), onClick: () => { setDraftCrop(null); updateSelectedCrop(undefined); } } : undefined}
+    />
+  );
+
   return (
-    <div className="h-screen overflow-hidden bg-[#f6f7fb] text-slate-900">
-      <header className="flex h-14 items-center gap-4 border-b border-slate-200 bg-white px-4">
-        <div className="shrink-0 text-base font-semibold tracking-tight">Image-Shift</div>
-        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="图片处理工具">
+    <div className="h-screen overflow-hidden bg-[var(--ui-canvas)] text-neutral-900">
+      <header className="flex h-[52px] items-center gap-2 border-b border-neutral-200 bg-white px-3">
+        <div className="flex shrink-0 items-center gap-2 pr-1">
+          <BrandMark />
+          <div className="text-[15px] font-semibold tracking-[-0.02em]">Image-Shift</div>
+        </div>
+        <div aria-hidden="true" className="mx-1 h-5 w-px bg-neutral-200" />
+        <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" aria-label={t("nav.toolsAria")}>
           {TOOL_MODES.map((mode) => (
             <button
               aria-current={activeMode === mode ? "page" : undefined}
-              className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm transition ${activeMode === mode ? "bg-slate-900 font-medium text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-[13px] transition ${activeMode === mode ? "border-neutral-200 bg-neutral-100 font-medium text-neutral-950 shadow-sm" : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"}`}
+              data-testid={`tool-${mode.toLowerCase().replaceAll(" ", "-")}`}
               key={mode}
               onClick={() => setActiveMode(mode)}
               type="button"
             >
-              {getModeLabel(mode)}
+              <ToolIcon mode={mode} />
+              {getModeLabel(mode, language)}
             </button>
           ))}
         </nav>
-        <button className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800" onClick={importImages} type="button">
-          添加图片
+        <LanguageToggle />
+        <button className="ui-button-primary flex shrink-0 items-center gap-1.5 px-3" onClick={importImages} type="button">
+          <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /></svg>
+          {t("common.addImages")}
         </button>
       </header>
 
-      <main className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden">
-        {actionError ? <div className="mx-4 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</div> : null}
+      <main className="flex h-[calc(100vh-52px)] min-h-0 flex-col overflow-hidden">
+        {actionError ? <div className="mx-3 mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{localizeErrorMessage(actionError, language)}</div> : null}
 
         {activeMode !== "Export" ? (
-          <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_280px] items-start gap-4 p-4">
+          files.length === 0 ? (
+            <EmptyWorkspace
+              activeMode={activeMode}
+              exportControls={exportControls}
+              onAddImages={importImages}
+              onDropFiles={appendImportedFiles}
+              settings={activeSettings}
+            />
+          ) : (
+          <div className="grid min-h-0 flex-1 grid-cols-[216px_minmax(0,1fr)_288px] items-stretch gap-3 p-3">
             <div className="min-h-0 self-stretch overflow-hidden">
               <FileListPanel
                 files={files}
@@ -1015,7 +1168,7 @@ export function ImageShiftDashboard() {
               />
             </div>
 
-            <section className="min-w-0 self-start">
+            <section className="h-full min-h-0 min-w-0 self-stretch">
               {activeMode === "Convert" ? (
                 <ConvertSummaryPanel
                   estimatedOutputSizeBytes={estimatedOutputSizeBytes}
@@ -1023,6 +1176,9 @@ export function ImageShiftDashboard() {
                   estimateError={estimateError}
                   estimating={estimating}
                   files={files}
+                  onAddImages={importImages}
+                  preview={preview}
+                  previewError={previewError}
                   selectedFile={selectedFile}
                   targetFormat={outputFormat.toUpperCase()}
                 />
@@ -1088,84 +1244,16 @@ export function ImageShiftDashboard() {
               ) : null}
             </section>
 
-            <aside className="min-h-0 self-stretch overflow-y-auto pr-1">
-              <div className="space-y-3">
-                {activeMode === "Convert" ? (
-                  <>
-                    <FormatCard outputFormat={outputFormat} onChange={setOutputFormat} />
-                    {outputFormat !== "png" ? <QualityCard onChange={setQuality} quality={quality} /> : null}
-                  </>
-                ) : null}
-                {activeMode === "Compress" ? (
-                  <>
-                    <QualityCard onChange={setQuality} quality={quality} />
-                    <FormatCard options={COMPRESS_FORMAT_OPTIONS} outputFormat={outputFormat === "png" ? "jpeg" : outputFormat} onChange={setOutputFormat} title="压缩格式" />
-                  </>
-                ) : null}
-                {activeMode === "Remove BG" ? (
-                  <FormatCard
-                    options={TRANSPARENT_FORMAT_OPTIONS}
-                    outputFormat={outputFormat === "jpeg" ? "png" : outputFormat}
-                    onChange={setOutputFormat}
-                    title="透明图格式"
-                  />
-                ) : null}
-                {activeMode === "Match Layout" ? (
-                  <>
-                    <LayoutReferenceCard
-                      analysis={referenceAnalysis}
-                      analyzing={referenceAnalyzing}
-                      error={referenceError}
-                      onChoose={chooseReferenceFile}
-                      referenceFile={referenceFile}
-                    />
-                    <LayoutAdjustmentCard
-                      adjustment={selectedLayoutAdjustment}
-                      disabled={!selectedFile || !referenceAnalysis || layoutPreviewWorkerBusy}
-                      onChange={updateSelectedLayoutAdjustment}
-                      onReset={() => updateSelectedLayoutAdjustment(createDefaultLayoutAdjustment())}
-                    />
-                  </>
-                ) : null}
-                {activeMode === "Crop" ? (
-                  <>
-                    <AspectRatioCard cropPreset={cropPreset} onChange={setCropPreset} />
-                    <CropFieldsCard
-                      crop={selectedFile?.crop}
-                      onChange={(field, value) =>
-                        updateSelectedCrop({
-                          ...(selectedFile?.crop ?? { left: 0, top: 0, width: preview?.width ?? 0, height: preview?.height ?? 0 }),
-                          [field]: Number(value.replace(/[^\d]/g, "")) || 0
-                        })
-                      }
-                    />
-                  </>
-                ) : null}
-                {activeMode === "Resize" ? (
-                  <>
-                    <ResizePresetCard
-                      onApply={(nextWidth, nextHeight) => {
-                        setWidth(String(nextWidth));
-                        setHeight(String(nextHeight));
-                      }}
-                      presets={RESIZE_PRESETS}
-                    />
-                    <ResizeFieldsCard height={height} lockRatio={lockRatio} onHeightChange={updateHeight} onLockRatioChange={setLockRatio} onWidthChange={updateWidth} width={width} />
-                  </>
-                ) : null}
-                <RunCard
-                  busy={busy || layoutOperationBusy}
-                  files={activeMode === "Match Layout" ? layoutReadyFileCount : files.length}
-                  onChooseFolder={chooseOutputDir}
-                  onRun={exportBatch}
-                  outputDir={outputDir}
-                  secondaryAction={activeMode === "Crop" ? { label: "清除裁剪", onClick: () => { setDraftCrop(null); updateSelectedCrop(undefined); } } : undefined}
-                />
+            <aside className="settings-rail ui-panel h-full min-h-0 self-stretch overflow-y-auto">
+              <div className="flex min-h-full flex-col">
+                {activeSettings}
+                {exportControls}
               </div>
             </aside>
           </div>
+          )
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
             <ExportHistoryPanel busy={busy || layoutOperationBusy} history={history} onChooseFolder={chooseOutputDir} onRun={exportBatch} outputDir={outputDir} ready={runnableFileCount > 0 && Boolean(outputDir) && !layoutOperationBusy} result={result} />
           </div>
         )}

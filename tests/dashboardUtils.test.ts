@@ -50,5 +50,6 @@ describe("dashboard utils", () => {
 
   it("describes layout matching as a relative projection onto the target canvas", () => {
     expect(getModeDescription("Match Layout")).toBe("按参考图匹配主体位置与大小。");
+    expect(getModeDescription("Match Layout", "en-US")).toBe("Match subject position and size to a reference image.");
   });
 });

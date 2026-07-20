@@ -356,7 +356,7 @@ function registerIpcHandlers() {
   ipcMain.handle("image:pick-input-files", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openFile", "multiSelections"],
-      filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }]
+      filters: [{ name: "JPG / PNG / WEBP", extensions: ["jpg", "jpeg", "png", "webp"] }]
     });
 
     return result.canceled ? [] : getImportedFiles(result.filePaths);
@@ -365,7 +365,7 @@ function registerIpcHandlers() {
   ipcMain.handle("image:pick-reference-file", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openFile"],
-      filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }]
+      filters: [{ name: "JPG / PNG / WEBP", extensions: ["jpg", "jpeg", "png", "webp"] }]
     });
 
     if (result.canceled || result.filePaths.length === 0) {
