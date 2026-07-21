@@ -1,7 +1,17 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
+
+const execFileAsync = promisify(execFile);
 
 const KEPT_LOCALES = new Set(["en-US.pak", "zh-CN.pak"]);
+const ARCH_NAMES = new Map([
+  [0, "ia32"],
+  [1, "x64"],
+  [2, "armv7l"],
+  [3, "arm64"]
+]);
 
 function assertInside(root, target) {
   const resolvedRoot = path.resolve(root);
@@ -38,22 +48,58 @@ async function pruneLocales(appOutDir) {
   }
 }
 
-module.exports = async function afterPack(context) {
-  if (context.electronPlatformName !== "win32" || context.arch !== 1) {
-    return;
+async function pruneOnnxRuntimes(appOutDir, onnxBin, platformName, archName) {
+  for (const platformEntry of await fs.readdir(onnxBin, { withFileTypes: true })) {
+    if (platformEntry.isDirectory() && platformEntry.name !== platformName) {
+      await removeInside(appOutDir, path.join(onnxBin, platformEntry.name));
+    }
   }
 
+  const platformDir = path.join(onnxBin, platformName);
+  for (const archEntry of await fs.readdir(platformDir, { withFileTypes: true })) {
+    if (archEntry.isDirectory() && archEntry.name !== archName) {
+      await removeInside(appOutDir, path.join(platformDir, archEntry.name));
+    }
+  }
+}
+
+async function adHocSignMacApp(appOutDir) {
+  const appBundle = (await fs.readdir(appOutDir)).find((entry) => entry.endsWith(".app"));
+  if (!appBundle) {
+    throw new Error(`Unable to find a macOS app bundle in ${appOutDir}`);
+  }
+
+  await execFileAsync("/usr/bin/codesign", [
+    "--force",
+    "--deep",
+    "--sign",
+    "-",
+    path.join(appOutDir, appBundle)
+  ]);
+}
+
+module.exports = async function afterPack(context) {
   const appOutDir = path.resolve(context.appOutDir);
   const unpackedModules = path.join(appOutDir, "resources", "app.asar.unpacked", "node_modules");
   const onnxBin = path.join(unpackedModules, "onnxruntime-node", "bin", "napi-v3");
+  const archName = ARCH_NAMES.get(context.arch);
 
-  await Promise.all([
-    removeInside(appOutDir, path.join(onnxBin, "darwin")),
-    removeInside(appOutDir, path.join(onnxBin, "linux")),
-    removeInside(appOutDir, path.join(onnxBin, "win32", "arm64")),
-    removeInside(appOutDir, path.join(unpackedModules, "@imgly", "background-removal-node", "node_modules", "sharp", "vendor"))
-  ]);
+  if (!archName) {
+    throw new Error(`Unsupported packaging architecture: ${context.arch}`);
+  }
 
-  await pruneModelAssets(appOutDir, unpackedModules);
-  await pruneLocales(appOutDir);
+  await pruneOnnxRuntimes(appOutDir, onnxBin, context.electronPlatformName, archName);
+
+  if (context.electronPlatformName === "win32") {
+    await removeInside(
+      appOutDir,
+      path.join(unpackedModules, "@imgly", "background-removal-node", "node_modules", "sharp", "vendor")
+    );
+  }
+
+  await Promise.all([pruneModelAssets(appOutDir, unpackedModules), pruneLocales(appOutDir)]);
+
+  if (context.electronPlatformName === "darwin") {
+    await adHocSignMacApp(appOutDir);
+  }
 };
