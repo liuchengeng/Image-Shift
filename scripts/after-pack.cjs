@@ -39,8 +39,14 @@ async function pruneModelAssets(appOutDir, unpackedModules) {
   }
 }
 
-async function pruneLocales(appOutDir) {
-  const localesDir = path.join(appOutDir, "locales");
+async function pruneLocales(appOutDir, resourcesDir, platformName) {
+  // macOS keeps locales as *.lproj directories inside the app bundle. The
+  // Windows/Linux layout keeps *.pak files next to the resources directory.
+  if (platformName === "darwin") {
+    return;
+  }
+
+  const localesDir = path.join(resourcesDir, "..", "locales");
   for (const entry of await fs.readdir(localesDir, { withFileTypes: true })) {
     if (entry.isFile() && !KEPT_LOCALES.has(entry.name)) {
       await removeInside(appOutDir, path.join(localesDir, entry.name));
@@ -80,7 +86,10 @@ async function adHocSignMacApp(appOutDir) {
 
 module.exports = async function afterPack(context) {
   const appOutDir = path.resolve(context.appOutDir);
-  const unpackedModules = path.join(appOutDir, "resources", "app.asar.unpacked", "node_modules");
+  // On macOS resources live inside Image-Shift.app/Contents/Resources, while
+  // Windows and Linux place them directly under appOutDir/resources.
+  const resourcesDir = context.packager.getResourcesDir(appOutDir);
+  const unpackedModules = path.join(resourcesDir, "app.asar.unpacked", "node_modules");
   const onnxBin = path.join(unpackedModules, "onnxruntime-node", "bin", "napi-v3");
   const archName = ARCH_NAMES.get(context.arch);
 
@@ -97,7 +106,10 @@ module.exports = async function afterPack(context) {
     );
   }
 
-  await Promise.all([pruneModelAssets(appOutDir, unpackedModules), pruneLocales(appOutDir)]);
+  await Promise.all([
+    pruneModelAssets(appOutDir, unpackedModules),
+    pruneLocales(appOutDir, resourcesDir, context.electronPlatformName)
+  ]);
 
   if (context.electronPlatformName === "darwin") {
     await adHocSignMacApp(appOutDir);

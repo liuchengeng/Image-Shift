@@ -56,6 +56,9 @@ jobs:
           test -n "$APP_PATH"
           codesign --verify --deep --strict "$APP_PATH"
           file "$APP_PATH/Contents/MacOS/Image-Shift"
+          ONNX_ROOT="$APP_PATH/Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3"
+          test -f "$ONNX_ROOT/darwin/${{ matrix.arch }}/onnxruntime_binding.node"
+          test "$(find "$ONNX_ROOT" -name onnxruntime_binding.node | wc -l | tr -d ' ')" = "1"
           hdiutil verify release/*.dmg
 
       - name: Upload DMG
